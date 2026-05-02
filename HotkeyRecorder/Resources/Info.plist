@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Hotkey Recorder</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+
+	<!-- Microphone usage description shown in permission dialog -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Hotkey Recorder needs microphone access to record audio clips when you hold the global hotkey.</string>
+
+	<!-- Required for CGEventTap global hotkey monitoring -->
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Hotkey Recorder uses Accessibility to listen for the global hotkey from any app.</string>
+
+	<!-- Application is agent (menu bar) — set to NO to show dock icon -->
+	<key>LSUIElement</key>
+	<false/>
+
+	<!-- Minimum macOS version: 13.0 (for SMAppService and MenuBarExtra) -->
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2026. All rights reserved.</string>
+
+	<!-- Background modes not required; CGEventTap works without it -->
+</dict>
+</plist>
