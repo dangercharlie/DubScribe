@@ -2,13 +2,12 @@ import SwiftUI
 import AppKit
 
 @main
-struct HotkeyRecorderApp: App {
+struct DubScribeApp: App {
 
     @StateObject private var coordinator = AppCoordinator()
 
     var body: some Scene {
-        // Main window
-        Window("Hotkey Recorder", id: "main") {
+        Window("DubScribe", id: "main") {
             ContentView()
                 .environmentObject(coordinator)
         }
@@ -18,7 +17,6 @@ struct HotkeyRecorderApp: App {
             CommandGroup(replacing: .newItem) { }
         }
 
-        // Menu bar extra
         MenuBarExtra {
             MenuBarView()
                 .environmentObject(coordinator)
@@ -31,10 +29,12 @@ struct HotkeyRecorderApp: App {
     @ViewBuilder
     private var menuBarLabel: some View {
         let isRecording = coordinator.recordingState.isRecording
-        HStack(spacing: 4) {
-            Image(systemName: isRecording ? "mic.fill" : "mic")
-                .symbolRenderingMode(isRecording ? .palette : .monochrome)
-                .foregroundStyle(isRecording ? Color.red : Color.primary)
-        }
+        let isListening: Bool = {
+            if case .listeningForVoice = coordinator.recordingState { return true }
+            return false
+        }()
+
+        Image(systemName: isRecording ? "mic.fill" : (isListening ? "ear" : "mic"))
+            .foregroundStyle(isRecording ? Color.red : (isListening ? Color(hue: 0.62, saturation: 0.6, brightness: 0.8) : Color.primary))
     }
 }

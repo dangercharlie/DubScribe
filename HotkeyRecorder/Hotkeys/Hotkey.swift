@@ -1,15 +1,24 @@
 import Foundation
 import Carbon
 
-// Represents a keyboard hotkey with modifiers
 struct Hotkey: Codable, Equatable {
     var keyCode: UInt32
     var modifiers: UInt32
 
-    static let defaultHotkey = Hotkey(
+    /// Default Hold-to-Record: ⌃⌥Space
+    static let defaultHoldHotkey = Hotkey(
         keyCode: UInt32(kVK_Space),
         modifiers: UInt32(controlKey | optionKey)
     )
+
+    /// Default Push-to-Record: ⌃⌥R
+    static let defaultPushHotkey = Hotkey(
+        keyCode: UInt32(kVK_ANSI_R),
+        modifiers: UInt32(controlKey | optionKey)
+    )
+
+    /// Legacy alias kept for AppSettings migration
+    static let defaultHotkey = defaultHoldHotkey
 
     var displayString: String {
         var parts: [String] = []

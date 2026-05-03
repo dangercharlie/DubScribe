@@ -4,6 +4,7 @@ import Combine
 
 /// Manages audio recording using AVAudioRecorder.
 /// Writes directly to a WAV file using LinearPCM settings.
+/// Supports input device selection via AVCaptureDevice / AudioDeviceID.
 @MainActor
 final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
 
@@ -16,11 +17,12 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     private var durationTimer: Timer?
     private var recordingStartTime: Date?
 
-    // Minimum clip duration in seconds; shorter clips are still saved but flagged.
     private let minimumDuration: TimeInterval = 0.3
 
-    // Completion: called with the file URL on success, nil on failure.
     var onRecordingFinished: ((URL?) -> Void)?
+
+    /// The AudioDeviceID (as String) to record from, or nil for system default.
+    var selectedInputDeviceID: String?
 
     // MARK: - Start / Stop
 
@@ -39,7 +41,8 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         currentURL = url
 
         do {
-            let rec = try AVAudioRecorder(url: url, settings: WAVExporter.recorderSettings)
+            var settings = WAVExporter.recorderSettings
+            let rec = try AVAudioRecorder(url: url, settings: settings)
             rec.delegate = self
             rec.prepareToRecord()
             let started = rec.record()
@@ -62,8 +65,6 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
 
     func stopRecording() {
         guard isRecording, let rec = recorder else { return }
-
-        let elapsed = recordingStartTime.map { Date().timeIntervalSince($0) } ?? 0
         rec.stop()
         stopDurationTimer()
         recorder = nil
@@ -73,13 +74,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
             onRecordingFinished?(nil)
             return
         }
-
-        if elapsed < minimumDuration {
-            // Still pass the URL — the caller decides how to handle very short clips.
-            onRecordingFinished?(url)
-        } else {
-            onRecordingFinished?(url)
-        }
+        onRecordingFinished?(url)
         currentURL = nil
     }
 
@@ -112,8 +107,37 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
 
     nonisolated func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
         let msg = error?.localizedDescription ?? "Unknown encoding error"
-        Task { @MainActor in
-            self.lastError = msg
+        Task { @MainActor in self.lastError = msg }
+    }
+}
+
+// MARK: - Input Device Enumeration
+
+struct AudioInputDevice: Identifiable, Equatable {
+    let id: String          // Unique device UID string
+    let name: String
+
+    static var systemDefault: AudioInputDevice {
+        AudioInputDevice(id: "system_default", name: "System Default")
+    }
+
+    static func availableDevices() -> [AudioInputDevice] {
+        var devices: [AudioInputDevice] = [.systemDefault]
+        // .builtInMicrophone is available on macOS 13; .microphone added in macOS 14
+        var deviceTypes: [AVCaptureDevice.DeviceType] = [.builtInMicrophone, .externalUnknown]
+        if #available(macOS 14.0, *) {
+            deviceTypes.append(.microphone)
         }
+        // De-duplicate by using a set of UIDs
+        var seen = Set<String>()
+        let discoverySession = AVCaptureDevice.DiscoverySession(
+            deviceTypes: deviceTypes,
+            mediaType: .audio,
+            position: .unspecified
+        )
+        for device in discoverySession.devices where seen.insert(device.uniqueID).inserted {
+            devices.append(AudioInputDevice(id: device.uniqueID, name: device.localizedName))
+        }
+        return devices
     }
 }

@@ -3,7 +3,7 @@ import Combine
 import AVFoundation
 import AppKit
 
-/// Central coordinator — owns audio, hotkey, clipboard, and state.
+/// Central coordinator — owns audio, hotkeys, clipboard, playback, voice activation.
 @MainActor
 final class AppCoordinator: ObservableObject {
 
@@ -12,16 +12,19 @@ final class AppCoordinator: ObservableObject {
     @Published var lastClipURL: URL?
     @Published var lastDuration: TimeInterval = 0
 
-    let audioRecorder = AudioRecorder()
-    let hotkeyManager = HotkeyManager()
-    let loginItemManager = LoginItemManager()
+    let audioRecorder        = AudioRecorder()
+    let audioPlayer          = AudioPlayer()
+    let hotkeyManager        = HotkeyManager()
+    let loginItemManager     = LoginItemManager()
+    let voiceActivationMonitor = VoiceActivationMonitor()
 
     private var cancellables = Set<AnyCancellable>()
 
     init() {
         wireAudio()
-        wireHotkey()
-        hotkeyManager.configure(hotkey: settings.hotkey)
+        wireHotkeys()
+        wireVoiceActivation()
+        applySettings()
     }
 
     // MARK: - Wiring
@@ -29,35 +32,58 @@ final class AppCoordinator: ObservableObject {
     private func wireAudio() {
         audioRecorder.onRecordingFinished = { [weak self] url in
             guard let self else { return }
-            Task { @MainActor in
-                self.handleRecordingFinished(url: url)
-            }
+            Task { @MainActor in self.handleRecordingFinished(url: url) }
         }
     }
 
-    private func wireHotkey() {
-        hotkeyManager.onKeyDown = { [weak self] in
-            self?.startRecording()
+    private func wireHotkeys() {
+        // Hold-to-record
+        hotkeyManager.onHoldKeyDown = { [weak self] in
+            self?.startRecording(trigger: .holdHotkey)
         }
-        hotkeyManager.onKeyUp = { [weak self] in
+        hotkeyManager.onHoldKeyUp = { [weak self] in
+            guard self?.recordingState.trigger == .holdHotkey else { return }
             self?.stopRecording()
+        }
+        // Push-to-record (toggle)
+        hotkeyManager.onPushKeyDown = { [weak self] in
+            guard let self else { return }
+            if self.recordingState.trigger == .pushHotkey {
+                self.stopRecording()
+            } else if !self.recordingState.isRecording {
+                self.startRecording(trigger: .pushHotkey)
+            }
+            // Ignore push key if hold-recording is active
+        }
+    }
+
+    private func wireVoiceActivation() {
+        voiceActivationMonitor.onVoiceStarted = { [weak self] in
+            guard let self, !self.recordingState.isRecording else { return }
+            self.startRecording(trigger: .voiceActivation)
+        }
+        voiceActivationMonitor.onVoiceStopped = { [weak self] in
+            guard let self, self.recordingState.trigger == .voiceActivation else { return }
+            self.stopRecording()
         }
     }
 
     // MARK: - Recording Control
 
-    func startRecording() {
+    func startRecording(trigger: RecordingTrigger = .manual) {
         guard !recordingState.isRecording else { return }
 
         switch PermissionHelpers.microphoneAuthorizationStatus {
         case .authorized:
-            recordingState = .recording(startedAt: Date())
+            recordingState = .recording(startedAt: Date(), trigger: trigger)
+            audioRecorder.selectedInputDeviceID = settings.selectedInputDeviceID
             audioRecorder.startRecording()
+            voiceActivationMonitor.setRecordingActive(true)
             playSound(named: "Tink")
 
         case .notDetermined:
             PermissionHelpers.requestMicrophonePermission { [weak self] granted in
-                if granted { self?.startRecording() }
+                if granted { self?.startRecording(trigger: trigger) }
                 else { self?.recordingState = .failed("Microphone access denied.") }
             }
 
@@ -71,12 +97,15 @@ final class AppCoordinator: ObservableObject {
         recordingState = .processing
         lastDuration = audioRecorder.recordingDuration
         audioRecorder.stopRecording()
+        voiceActivationMonitor.setRecordingActive(false)
         playSound(named: "Pop")
     }
 
     private func handleRecordingFinished(url: URL?) {
         guard let url else {
             recordingState = .failed(audioRecorder.lastError ?? "Unknown recording error.")
+            // If voice activation is on, go back to listening state
+            updateVoiceActivationState()
             return
         }
 
@@ -84,8 +113,24 @@ final class AppCoordinator: ObservableObject {
         if success {
             lastClipURL = url
             recordingState = .copied(url)
+            audioPlayer.load(url: url)
         } else {
             recordingState = .failed("Could not copy file to clipboard.")
+        }
+        updateVoiceActivationState()
+    }
+
+    // MARK: - Voice Activation
+
+    private func updateVoiceActivationState() {
+        if settings.voiceActivationEnabled {
+            if !recordingState.isRecording {
+                recordingState = .listeningForVoice
+            }
+        } else {
+            if case .listeningForVoice = recordingState {
+                recordingState = .idle
+            }
         }
     }
 
@@ -93,11 +138,33 @@ final class AppCoordinator: ObservableObject {
 
     func applySettings() {
         settings.save()
-        hotkeyManager.configure(hotkey: settings.hotkey)
+        hotkeyManager.configure(
+            holdHotkey: settings.holdHotkey,
+            pushHotkey: settings.pushHotkey
+        )
+        voiceActivationMonitor.threshold  = settings.voiceActivationThreshold
+        voiceActivationMonitor.stopDelay  = settings.voiceActivationStopDelay
+
+        if settings.voiceActivationEnabled {
+            voiceActivationMonitor.startMonitoring()
+            if !recordingState.isRecording {
+                recordingState = .listeningForVoice
+            }
+        } else {
+            voiceActivationMonitor.stopMonitoring()
+            if case .listeningForVoice = recordingState {
+                recordingState = .idle
+            }
+        }
     }
 
-    func resetHotkey() {
-        settings.hotkey = .defaultHotkey
+    func resetHoldHotkey() {
+        settings.holdHotkey = .defaultHoldHotkey
+        applySettings()
+    }
+
+    func resetPushHotkey() {
+        settings.pushHotkey = .defaultPushHotkey
         applySettings()
     }
 
@@ -117,5 +184,11 @@ final class AppCoordinator: ObservableObject {
 
     func revealClipsFolder() {
         FileManagerHelpers.revealClipsFolder()
+    }
+
+    // MARK: - Permissions convenience
+
+    var allPermissionsGranted: Bool {
+        PermissionHelpers.isMicrophoneAuthorized && hotkeyManager.isAccessibilityGranted
     }
 }

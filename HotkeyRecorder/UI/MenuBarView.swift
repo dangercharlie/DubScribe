@@ -6,7 +6,6 @@ struct MenuBarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // Status header
             Label {
                 Text(coordinator.recordingState.displayText)
                     .font(.system(size: 13, weight: .semibold))
@@ -19,12 +18,11 @@ struct MenuBarView: View {
 
             Divider()
 
-            // Start / Stop
             Button {
                 if coordinator.recordingState.isRecording {
                     coordinator.stopRecording()
                 } else {
-                    coordinator.startRecording()
+                    coordinator.startRecording(trigger: .manual)
                 }
             } label: {
                 Label(
@@ -35,23 +33,18 @@ struct MenuBarView: View {
 
             Divider()
 
-            // Last clip
             if let url = coordinator.lastClipURL {
-                Button {
-                    coordinator.revealLastClip()
-                } label: {
+                Button { coordinator.revealLastClip() } label: {
                     Label("Reveal Last Clip", systemImage: "waveform")
                 }
                 Text(url.lastPathComponent)
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 12)
-
                 Divider()
             }
 
-            // Window
-            Button("Open Main Window") {
+            Button("Open DubScribe") {
                 NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: "main")
             }
@@ -62,29 +55,31 @@ struct MenuBarView: View {
 
             Divider()
 
-            Button("Quit Hotkey Recorder") {
+            Button("Quit DubScribe") {
                 NSApp.terminate(nil)
             }
         }
-        .frame(minWidth: 220)
+        .frame(minWidth: 230)
     }
 
     private var statusIcon: String {
         switch coordinator.recordingState {
-        case .idle:       return "mic.slash"
-        case .recording:  return "mic.fill"
-        case .processing: return "waveform"
-        case .copied:     return "checkmark.circle"
-        case .failed:     return "exclamationmark.triangle"
+        case .idle:              return "mic.slash"
+        case .listeningForVoice: return "ear"
+        case .recording:         return "mic.fill"
+        case .processing:        return "waveform"
+        case .copied:            return "checkmark.circle"
+        case .failed:            return "exclamationmark.triangle"
         }
     }
 
     private var statusColor: Color {
         switch coordinator.recordingState {
-        case .recording:  return .red
-        case .copied:     return .green
-        case .failed:     return .orange
-        default:          return .secondary
+        case .recording:         return .red
+        case .copied:            return .green
+        case .listeningForVoice: return Color(hue: 0.62, saturation: 0.6, brightness: 0.7)
+        case .failed:            return .orange
+        default:                 return .secondary
         }
     }
 }

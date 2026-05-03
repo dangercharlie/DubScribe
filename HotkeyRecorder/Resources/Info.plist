@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Hotkey Recorder</string>
+	<string>DubScribe</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -23,7 +23,7 @@
 
 	<!-- Microphone usage description shown in permission dialog -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Hotkey Recorder needs microphone access to record audio clips when you hold the global hotkey.</string>
+	<string>DubScribe needs microphone access to record audio clips when you hold the global hotkey or voice activation triggers.</string>
 
 	<!-- Required for CGEventTap global hotkey monitoring -->
 	<key>NSAppleEventsUsageDescription</key>

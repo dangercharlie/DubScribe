@@ -23,6 +23,8 @@
 		AA000014 /* FileManagerHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100014 /* FileManagerHelpers.swift */; };
 		AA000015 /* PermissionHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100015 /* PermissionHelpers.swift */; };
 		AA000016 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = AA100016 /* Info.plist */; };
+		AA000017 /* AudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100017 /* AudioPlayer.swift */; };
+		AA000018 /* VoiceActivationMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100018 /* VoiceActivationMonitor.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,6 +44,8 @@
 		AA100014 /* FileManagerHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileManagerHelpers.swift; sourceTree = "<group>"; };
 		AA100015 /* PermissionHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionHelpers.swift; sourceTree = "<group>"; };
 		AA100016 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA100017 /* AudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayer.swift; sourceTree = "<group>"; };
+		AA100018 /* VoiceActivationMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceActivationMonitor.swift; sourceTree = "<group>"; };
 		AAPROD001 /* HotkeyRecorder.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HotkeyRecorder.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -112,6 +116,8 @@
 			children = (
 				AA100006 /* AudioRecorder.swift */,
 				AA100007 /* WAVExporter.swift */,
+				AA100017 /* AudioPlayer.swift */,
+				AA100018 /* VoiceActivationMonitor.swift */,
 			);
 			path = Audio;
 			sourceTree = "<group>";
@@ -250,6 +256,8 @@
 				AA000013 /* AppSettings.swift in Sources */,
 				AA000014 /* FileManagerHelpers.swift in Sources */,
 				AA000015 /* PermissionHelpers.swift in Sources */,
+				AA000017 /* AudioPlayer.swift in Sources */,
+				AA000018 /* VoiceActivationMonitor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

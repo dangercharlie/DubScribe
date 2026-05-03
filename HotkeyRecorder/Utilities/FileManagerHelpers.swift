@@ -3,15 +3,14 @@ import AppKit
 
 enum FileManagerHelpers {
 
-    /// Default clips directory: ~/Music/Hotkey Recorder/Clips/
+    /// Clips directory: ~/Music/DubScribe/Clips/
     static var clipsDirectory: URL {
         let music = FileManager.default.urls(for: .musicDirectory, in: .userDomainMask).first!
         return music
-            .appendingPathComponent("Hotkey Recorder", isDirectory: true)
+            .appendingPathComponent("DubScribe", isDirectory: true)
             .appendingPathComponent("Clips", isDirectory: true)
     }
 
-    /// Ensures the clips directory exists, creating it if needed.
     static func ensureClipsDirectoryExists() throws {
         try FileManager.default.createDirectory(
             at: clipsDirectory,
@@ -20,22 +19,24 @@ enum FileManagerHelpers {
         )
     }
 
-    /// Generates a timestamped WAV filename.
     static func newClipURL() -> URL {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
-        let timestamp = formatter.string(from: Date())
-        let filename = "Recording-\(timestamp).wav"
+        let filename = "Recording-\(formatter.string(from: Date())).wav"
         return clipsDirectory.appendingPathComponent(filename)
     }
 
-    /// Reveals a file in Finder.
     static func revealInFinder(_ url: URL) {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
-    /// Reveals the clips directory in Finder.
     static func revealClipsFolder() {
+        // Create the folder first if needed, then open it
+        try? FileManager.default.createDirectory(
+            at: clipsDirectory,
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
         NSWorkspace.shared.open(clipsDirectory)
     }
 }
