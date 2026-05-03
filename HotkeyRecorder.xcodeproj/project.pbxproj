@@ -25,6 +25,7 @@
 		AA000016 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = AA100016 /* Info.plist */; };
 		AA000017 /* AudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100017 /* AudioPlayer.swift */; };
 		AA000018 /* VoiceActivationMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100018 /* VoiceActivationMonitor.swift */; };
+		AA000019 /* MicTestManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100019 /* MicTestManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -46,6 +47,7 @@
 		AA100016 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AA100017 /* AudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayer.swift; sourceTree = "<group>"; };
 		AA100018 /* VoiceActivationMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceActivationMonitor.swift; sourceTree = "<group>"; };
+		AA100019 /* MicTestManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicTestManager.swift; sourceTree = "<group>"; };
 		AAPROD001 /* HotkeyRecorder.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HotkeyRecorder.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -118,6 +120,7 @@
 				AA100007 /* WAVExporter.swift */,
 				AA100017 /* AudioPlayer.swift */,
 				AA100018 /* VoiceActivationMonitor.swift */,
+				AA100019 /* MicTestManager.swift */,
 			);
 			path = Audio;
 			sourceTree = "<group>";
@@ -258,6 +261,7 @@
 				AA000015 /* PermissionHelpers.swift in Sources */,
 				AA000017 /* AudioPlayer.swift in Sources */,
 				AA000018 /* VoiceActivationMonitor.swift in Sources */,
+				AA000019 /* MicTestManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

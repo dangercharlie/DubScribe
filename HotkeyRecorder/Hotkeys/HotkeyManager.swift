@@ -2,164 +2,155 @@ import Foundation
 import Carbon
 import AppKit
 
-/// Manages two independent global hotkeys via a single CGEventTap:
-///   - Hold hotkey: fires onHoldKeyDown / onHoldKeyUp (press-and-hold recording)
-///   - Push hotkey: fires onPushKeyDown (toggle recording on each press)
+// MARK: - File-scope C callback (required — cannot be a closure with captures)
+private func carbonHotkeyCallback(
+    _ nextHandler: EventHandlerCallRef?,
+    _ event: EventRef?,
+    _ userData: UnsafeMutableRawPointer?
+) -> OSStatus {
+    guard let event, let userData else { return OSStatus(eventNotHandledErr) }
+
+    var hotKeyID = EventHotKeyID()
+    GetEventParameter(
+        event,
+        EventParamName(kEventParamDirectObject),
+        EventParamType(typeEventHotKeyID),
+        nil,
+        MemoryLayout<EventHotKeyID>.size,
+        nil,
+        &hotKeyID
+    )
+    let kind = GetEventKind(event)
+    let manager = Unmanaged<HotkeyManager>.fromOpaque(userData).takeUnretainedValue()
+
+    DispatchQueue.main.async {
+        switch hotKeyID.id {
+        case HotkeyManager.holdID:
+            if kind == UInt32(kEventHotKeyPressed)  { manager.onHoldKeyDown?() }
+            if kind == UInt32(kEventHotKeyReleased) { manager.onHoldKeyUp?()   }
+        case HotkeyManager.pushID:
+            if kind == UInt32(kEventHotKeyPressed)  { manager.onPushKeyDown?() }
+        default: break
+        }
+    }
+    return noErr
+}
+
+/// Registers global hotkeys using Carbon RegisterEventHotKey.
+/// Carbon hotkeys do NOT require Accessibility permission —
+/// they fire via the Application Event Target (not a low-level event tap).
 @MainActor
 final class HotkeyManager: ObservableObject {
 
-    @Published var isAccessibilityGranted: Bool = false
+    // Carbon does not need Accessibility — always report true so UI stays clear
+    @Published var isAccessibilityGranted: Bool = true
 
-    // Hold-to-record callbacks
+    // Carbon hotkey IDs (must be stable across reconfigures)
+    static let holdID: UInt32 = 1
+    static let pushID: UInt32 = 2
+    // 'dbsr' = DubScribe signature
+    private static let sig: FourCharCode = 0x64627372
+
+    // Callbacks
     var onHoldKeyDown: (() -> Void)?
-    var onHoldKeyUp: (() -> Void)?
-
-    // Push-to-record callback (toggle on each unique key-down)
+    var onHoldKeyUp:   (() -> Void)?
     var onPushKeyDown: (() -> Void)?
 
-    // Legacy single-hotkey callbacks — preserved for compatibility
-    var onKeyDown: (() -> Void)? {
-        get { onHoldKeyDown }
-        set { onHoldKeyDown = newValue }
-    }
-    var onKeyUp: (() -> Void)? {
-        get { onHoldKeyUp }
-        set { onHoldKeyUp = newValue }
-    }
+    // Diagnostic
+    @Published var hotkeysRegistered = false
+    @Published var lastEventTime: Date?
 
-    private var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    private var holdRef: EventHotKeyRef?
+    private var pushRef: EventHotKeyRef?
+    private var handlerRef: EventHandlerRef?
+    private var selfPtr: Unmanaged<HotkeyManager>?
 
     private var holdHotkey: Hotkey = .defaultHoldHotkey
     private var pushHotkey: Hotkey = .defaultPushHotkey
 
-    private var isHoldKeyDown = false
-    private var isPushKeyDown = false
+    init() { setUp() }
 
     // MARK: - Configuration
 
     func configure(holdHotkey: Hotkey, pushHotkey: Hotkey) {
         self.holdHotkey = holdHotkey
         self.pushHotkey = pushHotkey
-        restart()
+        tearDown()
+        setUp()
     }
 
-    /// Legacy single-hotkey configure (maps to holdHotkey)
+    /// Legacy compat
     func configure(hotkey: Hotkey) {
         configure(holdHotkey: hotkey, pushHotkey: pushHotkey)
     }
 
-    private func restart() {
-        tearDown()
-        checkAccessibilityAndSetUp()
-    }
+    /// No-op — Carbon doesn't need Accessibility
+    func checkAccessibilityAndSetUp() { isAccessibilityGranted = true }
+    func requestAccessibilityIfNeeded() { isAccessibilityGranted = true }
 
-    func checkAccessibilityAndSetUp() {
-        let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String as CFString
-        let options = [key: false] as CFDictionary
-        let trusted = AXIsProcessTrustedWithOptions(options)
-        isAccessibilityGranted = trusted
-        if trusted { setUp() }
-    }
-
-    func requestAccessibilityIfNeeded() {
-        let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String as CFString
-        let options = [key: true] as CFDictionary
-        let _ = AXIsProcessTrustedWithOptions(options)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-            self?.checkAccessibilityAndSetUp()
-        }
-    }
-
-    // MARK: - CGEventTap
+    // MARK: - Setup / Teardown
 
     private func setUp() {
-        let mask: CGEventMask =
-            (1 << CGEventType.keyDown.rawValue) |
-            (1 << CGEventType.keyUp.rawValue)
-
-        let selfPtr = Unmanaged.passRetained(self)
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: mask,
-            callback: { _, type, event, refcon -> Unmanaged<CGEvent>? in
-                guard let refcon else { return Unmanaged.passRetained(event) }
-                let mgr = Unmanaged<HotkeyManager>.fromOpaque(refcon).takeUnretainedValue()
-                return mgr.handleEvent(type: type, event: event)
-            },
-            userInfo: selfPtr.toOpaque()
-        ) else {
-            selfPtr.release()
-            print("HotkeyManager: CGEventTap creation failed — check Accessibility permission.")
+        // Install event handler once
+        var types = [
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased))
+        ]
+        let ptr = Unmanaged.passRetained(self)
+        selfPtr = ptr
+        let status = InstallEventHandler(
+            GetApplicationEventTarget(),
+            carbonHotkeyCallback,
+            types.count,
+            &types,
+            ptr.toOpaque(),
+            &handlerRef
+        )
+        if status != noErr {
+            print("[DubScribe.Hotkey] InstallApplicationEventHandler failed: \(status)")
+            ptr.release()
+            selfPtr = nil
             return
         }
 
-        eventTap = tap
-        let src = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        runLoopSource = src
-        CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
+        registerHotkeys()
+    }
+
+    private func registerHotkeys() {
+        // Hold hotkey
+        var holdID_ = EventHotKeyID(signature: Self.sig, id: Self.holdID)
+        let s1 = RegisterEventHotKey(
+            holdHotkey.keyCode, holdHotkey.modifiers,
+            holdID_, GetApplicationEventTarget(), 0, &holdRef
+        )
+        // Push hotkey
+        var pushID_ = EventHotKeyID(signature: Self.sig, id: Self.pushID)
+        let s2 = RegisterEventHotKey(
+            pushHotkey.keyCode, pushHotkey.modifiers,
+            pushID_, GetApplicationEventTarget(), 0, &pushRef
+        )
+
+        hotkeysRegistered = (s1 == noErr && s2 == noErr)
+        print("[DubScribe.Hotkey] Hold=\(holdHotkey.displayString) registered=\(s1==noErr)  Push=\(pushHotkey.displayString) registered=\(s2==noErr)")
+    }
+
+    nonisolated private func cleanUp(hold: EventHotKeyRef?, push: EventHotKeyRef?, handler: EventHandlerRef?, ptr: Unmanaged<HotkeyManager>?) {
+        if let r = hold { UnregisterEventHotKey(r) }
+        if let r = push { UnregisterEventHotKey(r) }
+        if let r = handler { RemoveEventHandler(r) }
+        ptr?.release()
     }
 
     private func tearDown() {
-        if let tap = eventTap { CGEvent.tapEnable(tap: tap, enable: false) }
-        if let src = runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes) }
-        eventTap = nil
-        runLoopSource = nil
-        isHoldKeyDown = false
-        isPushKeyDown = false
+        cleanUp(hold: holdRef, push: pushRef, handler: handlerRef, ptr: selfPtr)
+        holdRef = nil
+        pushRef = nil
+        handlerRef = nil
+        selfPtr = nil
+        hotkeysRegistered = false
     }
 
-    // MARK: - Event Handling
-
-    private func handleEvent(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        let keyCode = UInt32(event.getIntegerValueField(.keyboardEventKeycode))
-        let flags = event.flags
-        let activeMods = extractMods(from: flags)
-        let isAutoRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-
-        let matchesHold = keyCode == holdHotkey.keyCode && activeMods == holdHotkey.modifiers
-        let matchesPush = keyCode == pushHotkey.keyCode && activeMods == pushHotkey.modifiers
-
-        guard matchesHold || matchesPush else {
-            return Unmanaged.passRetained(event)
-        }
-
-        if type == .keyDown {
-            if matchesHold && !isAutoRepeat && !isHoldKeyDown {
-                isHoldKeyDown = true
-                DispatchQueue.main.async { [weak self] in self?.onHoldKeyDown?() }
-            }
-            if matchesPush && !isAutoRepeat && !isPushKeyDown {
-                isPushKeyDown = true
-                DispatchQueue.main.async { [weak self] in self?.onPushKeyDown?() }
-            }
-        } else if type == .keyUp {
-            if matchesHold {
-                isHoldKeyDown = false
-                DispatchQueue.main.async { [weak self] in self?.onHoldKeyUp?() }
-            }
-            if matchesPush {
-                isPushKeyDown = false
-            }
-        }
-
-        return nil // consume matched events
-    }
-
-    private func extractMods(from flags: CGEventFlags) -> UInt32 {
-        var mods: UInt32 = 0
-        if flags.contains(.maskControl)  { mods |= UInt32(controlKey) }
-        if flags.contains(.maskAlternate){ mods |= UInt32(optionKey)  }
-        if flags.contains(.maskShift)    { mods |= UInt32(shiftKey)   }
-        if flags.contains(.maskCommand)  { mods |= UInt32(cmdKey)     }
-        return mods
-    }
-
-    deinit {
-        if let tap = eventTap { CGEvent.tapEnable(tap: tap, enable: false) }
-        if let src = runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes) }
+    deinit { 
+        cleanUp(hold: holdRef, push: pushRef, handler: handlerRef, ptr: selfPtr)
     }
 }

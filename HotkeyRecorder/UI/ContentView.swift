@@ -6,9 +6,10 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var permissionsExpanded: Bool = false
     @State private var pulseAnimation = false
+    @State private var micGranted = PermissionHelpers.isMicrophoneAuthorized
 
     private var state: RecordingState { coordinator.recordingState }
-    private var allGranted: Bool { coordinator.allPermissionsGranted }
+    private var allGranted: Bool { micGranted }
 
     var body: some View {
         ZStack {
@@ -38,8 +39,12 @@ struct ContentView: View {
         }
         .frame(width: 460, height: 600)
         .onAppear {
-            // Auto-expand if any permission missing
             permissionsExpanded = !allGranted
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            // Refresh permission state when user returns from System Settings
+            micGranted = PermissionHelpers.isMicrophoneAuthorized
+            permissionsExpanded = !micGranted
         }
         .sheet(isPresented: $showSettings) {
             SettingsView().environmentObject(coordinator)
@@ -354,22 +359,19 @@ struct ContentView: View {
 
     private var permissionsSection: some View {
         VStack(spacing: 0) {
-            // Header row — always visible
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    permissionsExpanded.toggle()
-                }
+                withAnimation(.easeInOut(duration: 0.2)) { permissionsExpanded.toggle() }
             } label: {
                 HStack {
-                    Image(systemName: allGranted ? "checkmark.shield.fill" : "exclamationmark.shield.fill")
-                        .foregroundColor(allGranted
+                    Image(systemName: micGranted ? "checkmark.shield.fill" : "exclamationmark.shield.fill")
+                        .foregroundColor(micGranted
                                          ? Color(hue: 0.38, saturation: 0.7, brightness: 0.65)
                                          : .orange)
                         .font(.system(size: 13))
 
-                    Text(allGranted ? "Permissions ✓" : "Permissions — Attention Required")
+                    Text(micGranted ? "Permissions ✓" : "Microphone Required")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(allGranted ? .white.opacity(0.5) : .orange)
+                        .foregroundColor(micGranted ? .white.opacity(0.5) : .orange)
 
                     Spacer()
 
@@ -381,24 +383,41 @@ struct ContentView: View {
                 .padding(.vertical, 10)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(allGranted ? "Permissions — all granted" : "Permissions — attention required")
 
             if permissionsExpanded {
                 VStack(spacing: 6) {
-                    Divider().background(Color.white.opacity(0.06))
-                        .padding(.horizontal, 4)
+                    Divider().background(Color.white.opacity(0.06)).padding(.horizontal, 4)
 
                     PermissionRowView(
                         icon: "mic.fill",
                         label: "Microphone",
-                        granted: PermissionHelpers.isMicrophoneAuthorized,
+                        granted: micGranted,
                         action: { PermissionHelpers.openMicrophoneSettings() }
                     )
-                    PermissionRowView(
-                        icon: "keyboard",
-                        label: "Accessibility (Global Hotkey)",
-                        granted: coordinator.hotkeyManager.isAccessibilityGranted,
-                        action: { coordinator.hotkeyManager.requestAccessibilityIfNeeded() }
+
+                    // Carbon hotkeys — no Accessibility needed
+                    HStack(spacing: 10) {
+                        Image(systemName: "keyboard")
+                            .font(.system(size: 13))
+                            .foregroundColor(Color(hue: 0.38, saturation: 0.7, brightness: 0.7))
+                            .frame(width: 20)
+                        Text("Global Hotkeys (Carbon)")
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.7))
+                        Spacer()
+                        Text(coordinator.hotkeyManager.hotkeysRegistered ? "Active" : "Check app")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(coordinator.hotkeyManager.hotkeysRegistered
+                                             ? Color(hue: 0.38, saturation: 0.7, brightness: 0.7)
+                                             : .orange)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.white.opacity(0.03))
+                            .overlay(RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color(hue: 0.38, saturation: 0.5, brightness: 0.4).opacity(0.3), lineWidth: 1))
                     )
                 }
                 .padding(.horizontal, 8)
@@ -411,7 +430,7 @@ struct ContentView: View {
                 .fill(Color.white.opacity(0.04))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(allGranted
+                        .stroke(micGranted
                                 ? Color.white.opacity(0.07)
                                 : Color.orange.opacity(0.35),
                                 lineWidth: 1)

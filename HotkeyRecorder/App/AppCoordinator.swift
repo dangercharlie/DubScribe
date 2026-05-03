@@ -12,15 +12,18 @@ final class AppCoordinator: ObservableObject {
     @Published var lastClipURL: URL?
     @Published var lastDuration: TimeInterval = 0
 
-    let audioRecorder        = AudioRecorder()
-    let audioPlayer          = AudioPlayer()
-    let hotkeyManager        = HotkeyManager()
-    let loginItemManager     = LoginItemManager()
-    let voiceActivationMonitor = VoiceActivationMonitor()
+    let audioRecorder           = AudioRecorder()
+    let audioPlayer             = AudioPlayer()
+    let hotkeyManager           = HotkeyManager()
+    let loginItemManager        = LoginItemManager()
+    let voiceActivationMonitor  = VoiceActivationMonitor()
+    lazy var micTestManager     = MicTestManager(audioRecorder: audioRecorder)
 
     private var cancellables = Set<AnyCancellable>()
 
     init() {
+        // Wire voice monitor to use the recorder's level
+        voiceActivationMonitor.audioRecorder = audioRecorder
         wireAudio()
         wireHotkeys()
         wireVoiceActivation()
@@ -37,7 +40,6 @@ final class AppCoordinator: ObservableObject {
     }
 
     private func wireHotkeys() {
-        // Hold-to-record
         hotkeyManager.onHoldKeyDown = { [weak self] in
             self?.startRecording(trigger: .holdHotkey)
         }
@@ -45,7 +47,6 @@ final class AppCoordinator: ObservableObject {
             guard self?.recordingState.trigger == .holdHotkey else { return }
             self?.stopRecording()
         }
-        // Push-to-record (toggle)
         hotkeyManager.onPushKeyDown = { [weak self] in
             guard let self else { return }
             if self.recordingState.trigger == .pushHotkey {
@@ -53,7 +54,6 @@ final class AppCoordinator: ObservableObject {
             } else if !self.recordingState.isRecording {
                 self.startRecording(trigger: .pushHotkey)
             }
-            // Ignore push key if hold-recording is active
         }
     }
 
@@ -73,13 +73,20 @@ final class AppCoordinator: ObservableObject {
     func startRecording(trigger: RecordingTrigger = .manual) {
         guard !recordingState.isRecording else { return }
 
+        // Stop mic test if active
+        if micTestManager.state != .idle { micTestManager.reset() }
+
         switch PermissionHelpers.microphoneAuthorizationStatus {
         case .authorized:
             recordingState = .recording(startedAt: Date(), trigger: trigger)
             audioRecorder.selectedInputDeviceID = settings.selectedInputDeviceID
+            // Start level monitoring so voice activation works during recording
+            audioRecorder.startLevelMonitoring()
             audioRecorder.startRecording()
             voiceActivationMonitor.setRecordingActive(true)
+            micTestManager.isRealRecordingActive = true
             playSound(named: "Tink")
+            print("[DubScribe] Recording started (trigger=\(trigger))")
 
         case .notDetermined:
             PermissionHelpers.requestMicrophonePermission { [weak self] granted in
@@ -96,19 +103,19 @@ final class AppCoordinator: ObservableObject {
         guard recordingState.isRecording else { return }
         recordingState = .processing
         lastDuration = audioRecorder.recordingDuration
+        audioRecorder.stopLevelMonitoring()
         audioRecorder.stopRecording()
         voiceActivationMonitor.setRecordingActive(false)
+        micTestManager.isRealRecordingActive = false
         playSound(named: "Pop")
     }
 
     private func handleRecordingFinished(url: URL?) {
         guard let url else {
             recordingState = .failed(audioRecorder.lastError ?? "Unknown recording error.")
-            // If voice activation is on, go back to listening state
-            updateVoiceActivationState()
+            restoreVoiceState()
             return
         }
-
         let success = ClipboardManager.copyWAVFile(url)
         if success {
             lastClipURL = url
@@ -117,20 +124,18 @@ final class AppCoordinator: ObservableObject {
         } else {
             recordingState = .failed("Could not copy file to clipboard.")
         }
-        updateVoiceActivationState()
+        restoreVoiceState()
     }
 
-    // MARK: - Voice Activation
-
-    private func updateVoiceActivationState() {
+    private func restoreVoiceState() {
         if settings.voiceActivationEnabled {
+            // Resume level monitoring for voice activation
+            audioRecorder.startLevelMonitoring()
             if !recordingState.isRecording {
                 recordingState = .listeningForVoice
             }
-        } else {
-            if case .listeningForVoice = recordingState {
-                recordingState = .idle
-            }
+        } else if case .listeningForVoice = recordingState {
+            recordingState = .idle
         }
     }
 
@@ -138,35 +143,28 @@ final class AppCoordinator: ObservableObject {
 
     func applySettings() {
         settings.save()
-        hotkeyManager.configure(
-            holdHotkey: settings.holdHotkey,
-            pushHotkey: settings.pushHotkey
-        )
+        hotkeyManager.configure(holdHotkey: settings.holdHotkey, pushHotkey: settings.pushHotkey)
         voiceActivationMonitor.threshold  = settings.voiceActivationThreshold
         voiceActivationMonitor.stopDelay  = settings.voiceActivationStopDelay
+        micTestManager.threshold          = settings.voiceActivationThreshold
 
         if settings.voiceActivationEnabled {
+            audioRecorder.startLevelMonitoring()
             voiceActivationMonitor.startMonitoring()
             if !recordingState.isRecording {
                 recordingState = .listeningForVoice
             }
         } else {
-            voiceActivationMonitor.stopMonitoring()
-            if case .listeningForVoice = recordingState {
-                recordingState = .idle
+            if !recordingState.isRecording {
+                audioRecorder.stopLevelMonitoring()
             }
+            voiceActivationMonitor.stopMonitoring()
+            if case .listeningForVoice = recordingState { recordingState = .idle }
         }
     }
 
-    func resetHoldHotkey() {
-        settings.holdHotkey = .defaultHoldHotkey
-        applySettings()
-    }
-
-    func resetPushHotkey() {
-        settings.pushHotkey = .defaultPushHotkey
-        applySettings()
-    }
+    func resetHoldHotkey() { settings.holdHotkey = .defaultHoldHotkey; applySettings() }
+    func resetPushHotkey() { settings.pushHotkey = .defaultPushHotkey; applySettings() }
 
     // MARK: - Sounds
 
@@ -182,13 +180,12 @@ final class AppCoordinator: ObservableObject {
         FileManagerHelpers.revealInFinder(url)
     }
 
-    func revealClipsFolder() {
-        FileManagerHelpers.revealClipsFolder()
-    }
+    func revealClipsFolder() { FileManagerHelpers.revealClipsFolder() }
 
-    // MARK: - Permissions convenience
+    // MARK: - Permissions
 
     var allPermissionsGranted: Bool {
-        PermissionHelpers.isMicrophoneAuthorized && hotkeyManager.isAccessibilityGranted
+        // Carbon hotkeys don't need Accessibility — only mic matters
+        PermissionHelpers.isMicrophoneAuthorized
     }
 }

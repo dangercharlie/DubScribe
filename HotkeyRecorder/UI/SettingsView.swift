@@ -223,6 +223,13 @@ struct SettingsView: View {
                             }
                         }
 
+                        // 3b. Mic Test
+                        MicTestSectionView(
+                            micTestManager: coordinator.micTestManager,
+                            threshold: $coordinator.settings.voiceActivationThreshold,
+                            isRealRecordingActive: coordinator.micTestManager.isRealRecordingActive
+                        )
+
                         // 4. General
                         settingsSection("General") {
                             VStack(spacing: 10) {
@@ -266,13 +273,32 @@ struct SettingsView: View {
                                     granted: PermissionHelpers.isMicrophoneAuthorized,
                                     action: { PermissionHelpers.openMicrophoneSettings() }
                                 )
-                                settingsPermissionRow(
-                                    icon: "keyboard",
-                                    title: "Accessibility",
-                                    description: "Required for global hotkeys from any app.\nSystem Settings → Privacy & Security → Accessibility",
-                                    granted: coordinator.hotkeyManager.isAccessibilityGranted,
-                                    action: { coordinator.hotkeyManager.requestAccessibilityIfNeeded() }
-                                )
+                                // Carbon hotkeys don't need Accessibility
+                                HStack(spacing: 12) {
+                                    Image(systemName: "keyboard")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(Color(hue: 0.38, saturation: 0.7, brightness: 0.7))
+                                        .frame(width: 22)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Global Hotkeys")
+                                            .font(.system(size: 13, weight: .medium))
+                                            .foregroundColor(.white.opacity(0.85))
+                                        Text("Uses Carbon RegisterEventHotKey — no Accessibility permission needed.")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.white.opacity(0.35))
+                                        Text(coordinator.hotkeyManager.hotkeysRegistered
+                                             ? "Hotkeys registered ✓"
+                                             : "Hotkeys not registered — restart app")
+                                            .font(.system(size: 10, weight: .medium))
+                                            .foregroundColor(coordinator.hotkeyManager.hotkeysRegistered
+                                                             ? Color(hue: 0.38, saturation: 0.7, brightness: 0.7)
+                                                             : .orange)
+                                    }
+                                    Spacer()
+                                    Label("Active", systemImage: "checkmark.circle.fill")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(Color(hue: 0.38, saturation: 0.7, brightness: 0.7))
+                                }
                             }
                         }
                     }
@@ -281,11 +307,17 @@ struct SettingsView: View {
                 }
             }
         }
-        .frame(width: 440, height: 640)
+        .frame(width: 440, height: 720)
         .onAppear {
             availableDevices = AudioInputDevice.availableDevices()
         }
+        .onDisappear {
+            coordinator.micTestManager.reset()
+        }
     }
+
+    // MARK: - Mic Test Section (extracted)
+
 
     // MARK: - Section Builder
 
@@ -469,5 +501,142 @@ private extension Text {
         self
             .font(.system(size: 13, weight: .medium))
             .foregroundColor(.white.opacity(0.8))
+    }
+}
+
+struct MicTestSectionView: View {
+    @ObservedObject var micTestManager: MicTestManager
+    @Binding var threshold: Float
+    let isRealRecordingActive: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Microphone Test")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(.white.opacity(0.4))
+                .textCase(.uppercase)
+                .tracking(1.2)
+            
+            VStack(spacing: 12) {
+                // Status row
+                HStack {
+                    Image(systemName: micTestStatusIcon)
+                        .font(.system(size: 14))
+                        .foregroundColor(micTestStatusColor)
+                    Text(micTestStatusText)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.7))
+                    Spacer()
+                }
+
+                // Level meter
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.white.opacity(0.1)).frame(height: 8)
+                        // Level bar
+                        Capsule()
+                            .fill(micTestManager.crossesThreshold
+                                  ? Color(hue: 0.33, saturation: 0.8, brightness: 0.7)
+                                  : Color(hue: 0.62, saturation: 0.6, brightness: 0.7))
+                            .frame(
+                                width: geo.size.width * CGFloat(micTestManager.inputLevel),
+                                height: 8
+                            )
+                            .animation(.linear(duration: 0.05), value: micTestManager.inputLevel)
+                        // Threshold marker
+                        let threshX = geo.size.width * CGFloat(threshold)
+                        Rectangle()
+                            .fill(Color.orange.opacity(0.8))
+                            .frame(width: 2, height: 12)
+                            .offset(x: threshX - 1, y: -2)
+                    }
+                }
+                .frame(height: 12)
+
+                HStack {
+                    Text(String(format: "%.0f%%", micTestManager.inputLevel * 100))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.4))
+                    Text("| threshold \(Int(threshold * 100))%")
+                        .font(.system(size: 10))
+                        .foregroundColor(.orange.opacity(0.6))
+                    Spacer()
+                }
+
+                // Control buttons
+                HStack(spacing: 8) {
+                    // Monitor toggle
+                    Button(micTestManager.state == .idle ? "Start Monitor" : "Stop Monitor") {
+                        if micTestManager.state == .idle {
+                            micTestManager.startMonitor()
+                        } else if micTestManager.state == .monitoring {
+                            micTestManager.stopMonitor()
+                        }
+                    }
+                    .buttonStyle(SettingsGhostButtonStyle())
+                    .disabled(isRealRecordingActive)
+
+                    // Record test clip
+                    if micTestManager.state == .monitoring {
+                        Button("Record Test Clip") {
+                            micTestManager.startTestRecording()
+                        }
+                        .buttonStyle(SettingsGhostButtonStyle())
+                    } else if micTestManager.state == .recordingTest {
+                        Button("Stop") {
+                            micTestManager.stopTestRecording()
+                        }
+                        .buttonStyle(SettingsGhostButtonStyle())
+                    } else if micTestManager.state == .testDone || micTestManager.state == .playingTest {
+                        Button(micTestManager.state == .playingTest ? "Playing…" : "Play Test Clip") {
+                            micTestManager.playTestClip()
+                        }
+                        .buttonStyle(SettingsGhostButtonStyle())
+                        .disabled(micTestManager.state == .playingTest)
+                    }
+                }
+
+                Text("Test clips are not copied to clipboard.")
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.25))
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white.opacity(0.05))
+                    .overlay(RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1))
+            )
+        }
+    }
+
+    private var micTestStatusIcon: String {
+        switch micTestManager.state {
+        case .idle:          return "mic.slash"
+        case .monitoring:    return micTestManager.crossesThreshold ? "waveform" : "ear"
+        case .recordingTest: return "mic.fill"
+        case .playingTest:   return "play.fill"
+        case .testDone:      return "checkmark.circle"
+        }
+    }
+    private var micTestStatusColor: Color {
+        switch micTestManager.state {
+        case .idle:          return .secondary
+        case .monitoring:    return micTestManager.crossesThreshold
+                                   ? Color(hue: 0.33, saturation: 0.8, brightness: 0.7)
+                                   : Color(hue: 0.62, saturation: 0.6, brightness: 0.7)
+        case .recordingTest: return .red
+        case .playingTest:   return Color(hue: 0.62, saturation: 0.6, brightness: 0.7)
+        case .testDone:      return Color(hue: 0.38, saturation: 0.7, brightness: 0.7)
+        }
+    }
+    private var micTestStatusText: String {
+        switch micTestManager.state {
+        case .idle:          return "Tap 'Start Monitor' to check mic input"
+        case .monitoring:    return micTestManager.crossesThreshold ? "Voice detected" : "Listening…"
+        case .recordingTest: return "Recording test clip…"
+        case .playingTest:   return "Playing back test clip…"
+        case .testDone:      return "Test clip ready — tap Play to listen"
+        }
     }
 }
