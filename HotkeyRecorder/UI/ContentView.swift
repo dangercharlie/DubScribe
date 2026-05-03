@@ -3,10 +3,10 @@ import AVFoundation
 
 struct ContentView: View {
     @EnvironmentObject var coordinator: AppCoordinator
-    @State private var showSettings = false
     @State private var permissionsExpanded: Bool = false
     @State private var pulseAnimation = false
     @State private var micGranted = PermissionHelpers.isMicrophoneAuthorized
+    @State private var displayDuration: TimeInterval = 0
 
     private var state: RecordingState { coordinator.recordingState }
     private var allGranted: Bool { micGranted }
@@ -41,12 +41,19 @@ struct ContentView: View {
         .onAppear {
             permissionsExpanded = !allGranted
         }
+        .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
+            if state.isRecording {
+                displayDuration = coordinator.audioRecorder.recordingDuration
+            } else {
+                displayDuration = 0
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             // Refresh permission state when user returns from System Settings
             micGranted = PermissionHelpers.isMicrophoneAuthorized
             permissionsExpanded = !micGranted
         }
-        .sheet(isPresented: $showSettings) {
+        .sheet(isPresented: $coordinator.isSettingsOpen) {
             SettingsView().environmentObject(coordinator)
         }
     }
@@ -79,7 +86,7 @@ struct ContentView: View {
             }
             Spacer()
             Button {
-                showSettings = true
+                coordinator.isSettingsOpen = true
             } label: {
                 Image(systemName: "gearshape.fill")
                     .font(.system(size: 16))
@@ -223,11 +230,11 @@ struct ContentView: View {
                 .animation(.easeInOut, value: state.displayText)
 
             if case .recording = state {
-                Text(durationString(coordinator.audioRecorder.recordingDuration))
+                Text(durationString(displayDuration))
                     .font(.system(size: 28, weight: .bold, design: .monospaced))
                     .foregroundColor(.red.opacity(0.9))
                     .transition(.opacity)
-                    .accessibilityLabel("Recording duration: \(durationString(coordinator.audioRecorder.recordingDuration))")
+                    .accessibilityLabel("Recording duration: \(durationString(displayDuration))")
             } else if coordinator.lastDuration > 0 && !state.isRecording {
                 Text("Last: \(durationString(coordinator.lastDuration))")
                     .font(.system(size: 13, weight: .medium))

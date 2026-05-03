@@ -11,6 +11,7 @@ final class AppCoordinator: ObservableObject {
     @Published var settings: AppSettings = .load()
     @Published var lastClipURL: URL?
     @Published var lastDuration: TimeInterval = 0
+    @Published var isSettingsOpen = false
 
     let audioRecorder           = AudioRecorder()
     let audioPlayer             = AudioPlayer()
@@ -60,6 +61,7 @@ final class AppCoordinator: ObservableObject {
     private func wireVoiceActivation() {
         voiceActivationMonitor.onVoiceStarted = { [weak self] in
             guard let self, !self.recordingState.isRecording else { return }
+            if self.isSettingsOpen || self.micTestManager.state != .idle { return }
             self.startRecording(trigger: .voiceActivation)
         }
         voiceActivationMonitor.onVoiceStopped = { [weak self] in
