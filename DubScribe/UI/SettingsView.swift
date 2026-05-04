@@ -301,6 +301,42 @@ struct SettingsView: View {
                                 }
                             }
                         }
+
+                        // 6. About
+                        settingsSection("About") {
+                            VStack(spacing: 10) {
+                                HStack(spacing: 16) {
+                                    Image(nsImage: NSImage(named: "AppIcon") ?? NSImage())
+                                        .resizable()
+                                        .frame(width: 48, height: 48)
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("DubScribe")
+                                            .font(.system(size: 14, weight: .bold))
+                                            .foregroundColor(.white)
+                                        Text("Version 0.4")
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.white.opacity(0.5))
+                                    }
+                                    Spacer()
+                                    Link(destination: URL(string: "https://ko-fi.com/dangercharlie")!) {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "cup.and.saucer.fill")
+                                            Text("Buy Me A Coffee")
+                                        }
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .fill(Color(hue: 0.1, saturation: 0.8, brightness: 0.9))
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 20)
