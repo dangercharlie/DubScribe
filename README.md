@@ -33,7 +33,7 @@ Think of it like a screenshot tool, but for quick WAV audio snippets.
 - Built with Xcode
 - Records short WAV audio clips
 - Copies the finished WAV file to the clipboard automatically
-- Global hotkey recording
+- Global hotkey recording (Uses Carbon APIs — no annoying Accessibility permissions required!)
 - Push-to-record and hold-to-record style workflows
 - Menu bar utility design
 - Last recording preview/playback
@@ -43,6 +43,14 @@ Think of it like a screenshot tool, but for quick WAV audio snippets.
 - Mic test / input feedback
 - Launch at login
 - Minimal keyboard accessibility support
+
+---
+
+## Installation
+
+1. Download the latest `.dmg` from the [Releases](https://github.com/dangercharlie/HotKeyRecorder/releases) page.
+2. Open the `.dmg` and drag **DubScribe** to your `Applications` folder.
+3. Launch DubScribe. *(Note: Since this is an unsigned indie app, you may need to Right-Click -> Open the first time, or allow it in System Settings -> Privacy & Security).*
 
 ---
 
@@ -108,7 +116,6 @@ Some broader tools can record audio, video, screenshots, and copy media to the c
 - macOS
 - Apple Silicon Mac
 - Microphone access
-- Accessibility/Input Monitoring permissions may be required for global hotkeys depending on macOS settings and build configuration
 
 ---
 
@@ -137,10 +144,17 @@ The goal was to see whether a focused native utility could be built quickly from
 
 Early release.
 
-Expect rough edges, especially around macOS permissions, global hotkeys, and input-device behavior across different machines.
+The core audio and hotkey systems are stable, but expect some rough edges around edge-case hardware or future macOS updates.
 
 ---
 
 ## License
 
 DubScribe is released under the MIT License.
+
+---
+
+## Support
+
+If you find DubScribe useful, consider buying me a coffee!  
+[☕️ Buy Me A Coffee](https://ko-fi.com/dangercharlie)
