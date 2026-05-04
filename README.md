@@ -8,6 +8,12 @@ The core workflow is simple:
 
 It is designed for moments when you do not want to open a full audio editor, manage a voice memo library, export a file manually, or transcribe your voice into text. DubScribe is for capturing the actual audio clip as a pasteable file.
 
+<p align="center">
+  <img src="screenshots/main_window.png" width="350" alt="Main Window" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="screenshots/settings_window.png" width="350" alt="Settings Window" />
+</p>
+
 ---
 
 ## Why?
