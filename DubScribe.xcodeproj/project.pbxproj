@@ -22,10 +22,10 @@
 		AA000013 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100013 /* AppSettings.swift */; };
 		AA000014 /* FileManagerHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100014 /* FileManagerHelpers.swift */; };
 		AA000015 /* PermissionHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100015 /* PermissionHelpers.swift */; };
-		AA000016 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = AA100016 /* Info.plist */; };
 		AA000017 /* AudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100017 /* AudioPlayer.swift */; };
 		AA000018 /* VoiceActivationMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100018 /* VoiceActivationMonitor.swift */; };
 		AA000019 /* MicTestManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100019 /* MicTestManager.swift */; };
+		AA000020 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA100020 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -48,7 +48,8 @@
 		AA100017 /* AudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayer.swift; sourceTree = "<group>"; };
 		AA100018 /* VoiceActivationMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceActivationMonitor.swift; sourceTree = "<group>"; };
 		AA100019 /* MicTestManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicTestManager.swift; sourceTree = "<group>"; };
-		AAPROD001 /* HotkeyRecorder.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HotkeyRecorder.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA100020 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AAPROD001 /* DubScribe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DubScribe.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -62,20 +63,12 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		AAGRP0000 /* root */ = {
+		AAGRP0000 = {
 			isa = PBXGroup;
 			children = (
 				AAGRP0001 /* HotkeyRecorder */,
 				AAGRP0099 /* Products */,
 			);
-			sourceTree = "<group>";
-		};
-		AAGRP0099 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				AAPROD001 /* HotkeyRecorder.app */,
-			);
-			name = Products;
 			sourceTree = "<group>";
 		};
 		AAGRP0001 /* HotkeyRecorder */ = {
@@ -171,17 +164,26 @@
 		AAGRP0090 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				AA100020 /* Assets.xcassets */,
 				AA100016 /* Info.plist */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
 		};
+		AAGRP0099 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AAPROD001 /* DubScribe.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		AATGT0001 /* HotkeyRecorder */ = {
+		AATGT0001 /* DubScribe */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = AACFL0002 /* Build configuration list for PBXNativeTarget "HotkeyRecorder" */;
+			buildConfigurationList = AACFL0002 /* Build configuration list for PBXNativeTarget "DubScribe" */;
 			buildPhases = (
 				AABP0002 /* Sources */,
 				AABP0001 /* Frameworks */,
@@ -191,9 +193,9 @@
 			);
 			dependencies = (
 			);
-			name = HotkeyRecorder;
+			name = DubScribe;
 			productName = HotkeyRecorder;
-			productReference = AAPROD001 /* HotkeyRecorder.app */;
+			productReference = AAPROD001 /* DubScribe.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -211,7 +213,7 @@
 					};
 				};
 			};
-			buildConfigurationList = AACFL0001 /* Build configuration list for PBXProject "HotkeyRecorder" */;
+			buildConfigurationList = AACFL0001 /* Build configuration list for PBXProject "DubScribe" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -224,7 +226,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				AATGT0001 /* HotkeyRecorder */,
+				AATGT0001 /* DubScribe */,
 			);
 		};
 /* End PBXProject section */
@@ -234,6 +236,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA000020 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -385,7 +388,7 @@
 			};
 			name = Release;
 		};
-		AACFG0003 /* Debug - Target */ = {
+		AACFG0003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ARCHS = arm64;
@@ -399,20 +402,22 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HotkeyRecorder/Resources/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Dub Scribe";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.hotkeyrecorder.app;
+				MARKETING_VERSION = 0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dubscribe.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
 		};
-		AACFG0004 /* Release - Target */ = {
+		AACFG0004 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ARCHS = arm64;
@@ -426,13 +431,15 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HotkeyRecorder/Resources/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Dub Scribe";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.hotkeyrecorder.app;
+				MARKETING_VERSION = 0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dubscribe.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -442,7 +449,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		AACFL0001 /* Build configuration list for PBXProject "HotkeyRecorder" */ = {
+		AACFL0001 /* Build configuration list for PBXProject "DubScribe" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				AACFG0001 /* Debug */,
@@ -451,17 +458,16 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		AACFL0002 /* Build configuration list for PBXNativeTarget "HotkeyRecorder" */ = {
+		AACFL0002 /* Build configuration list for PBXNativeTarget "DubScribe" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				AACFG0003 /* Debug - Target */,
-				AACFG0004 /* Release - Target */,
+				AACFG0003 /* Debug */,
+				AACFG0004 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
 	};
 	rootObject = AAPROJ001 /* Project object */;
 }
