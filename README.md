@@ -54,7 +54,7 @@ Think of it like a screenshot tool, but for quick WAV audio snippets.
 
 ## Installation
 
-1. Download the latest `.dmg` from the [Releases](https://github.com/dangercharlie/HotKeyRecorder/releases) page.
+1. Download the latest `.dmg` from the [Releases](https://github.com/dangercharlie/DubScribe/releases) page.
 2. Open the `.dmg` and drag **DubScribe** to your `Applications` folder.
 3. Launch DubScribe. *(Note: Since this is an unsigned indie app, you may need to Right-Click -> Open the first time, or allow it in System Settings -> Privacy & Security).*
 
