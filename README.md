@@ -143,4 +143,4 @@ Expect rough edges, especially around macOS permissions, global hotkeys, and inp
 
 ## License
 
-Add your chosen license here.
+DubScribe is released under the MIT License.
