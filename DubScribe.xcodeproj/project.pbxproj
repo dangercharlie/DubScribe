@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		AA000001 /* HotkeyRecorderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100001 /* HotkeyRecorderApp.swift */; };
+		AA000001 /* DubScribeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100001 /* DubScribeApp.swift */; };
 		AA000002 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100002 /* AppCoordinator.swift */; };
 		AA000003 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100003 /* ContentView.swift */; };
 		AA000004 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100004 /* SettingsView.swift */; };
@@ -29,7 +29,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		AA100001 /* HotkeyRecorderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyRecorderApp.swift; sourceTree = "<group>"; };
+		AA100001 /* DubScribeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DubScribeApp.swift; sourceTree = "<group>"; };
 		AA100002 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
 		AA100003 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		AA100004 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -66,12 +66,12 @@
 		AAGRP0000 = {
 			isa = PBXGroup;
 			children = (
-				AAGRP0001 /* HotkeyRecorder */,
+				AAGRP0001 /* DubScribe */,
 				AAGRP0099 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		AAGRP0001 /* HotkeyRecorder */ = {
+		AAGRP0001 /* DubScribe */ = {
 			isa = PBXGroup;
 			children = (
 				AAGRP0010 /* App */,
@@ -84,13 +84,13 @@
 				AAGRP0080 /* Utilities */,
 				AAGRP0090 /* Resources */,
 			);
-			path = HotkeyRecorder;
+			path = DubScribe;
 			sourceTree = "<group>";
 		};
 		AAGRP0010 /* App */ = {
 			isa = PBXGroup;
 			children = (
-				AA100001 /* HotkeyRecorderApp.swift */,
+				AA100001 /* DubScribeApp.swift */,
 				AA100002 /* AppCoordinator.swift */,
 			);
 			path = App;
@@ -194,7 +194,7 @@
 			dependencies = (
 			);
 			name = DubScribe;
-			productName = HotkeyRecorder;
+			productName = DubScribe;
 			productReference = AAPROD001 /* DubScribe.app */;
 			productType = "com.apple.product-type.application";
 		};
@@ -247,7 +247,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				AA000001 /* HotkeyRecorderApp.swift in Sources */,
+				AA000001 /* DubScribeApp.swift in Sources */,
 				AA000002 /* AppCoordinator.swift in Sources */,
 				AA000003 /* ContentView.swift in Sources */,
 				AA000004 /* SettingsView.swift in Sources */,
@@ -394,14 +394,14 @@
 				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = HotkeyRecorder/HotkeyRecorder.entitlements;
+				CODE_SIGN_ENTITLEMENTS = DubScribe/DubScribe.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = HotkeyRecorder/Resources/Info.plist;
+				INFOPLIST_FILE = DubScribe/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Dub Scribe";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -423,14 +423,14 @@
 				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = HotkeyRecorder/HotkeyRecorder.entitlements;
+				CODE_SIGN_ENTITLEMENTS = DubScribe/DubScribe.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = HotkeyRecorder/Resources/Info.plist;
+				INFOPLIST_FILE = DubScribe/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Dub Scribe";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = (
