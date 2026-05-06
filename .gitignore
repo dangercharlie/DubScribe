@@ -56,3 +56,8 @@ DerivedData/
 PreviewContent/
 release_dmg/
 build/
+
+# Application Binaries
+*.app
+*.dmg
+*.zip

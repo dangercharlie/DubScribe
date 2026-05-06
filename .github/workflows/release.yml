@@ -1,0 +1,33 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*' # Triggers whenever you push a tag like v0.5
+
+jobs:
+  build:
+    runs-on: macos-latest # Uses an Apple Silicon Mac hosted by GitHub
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build App with Xcode
+        run: |
+          xcodebuild -project DubScribe.xcodeproj -scheme DubScribe -configuration Release clean build -derivedDataPath build
+
+      - name: Package into DMG and ZIP
+        run: |
+          mkdir release_dmg
+          cp -R build/Build/Products/Release/DubScribe.app release_dmg/
+          cd release_dmg
+          hdiutil create -volname "DubScribe" -srcfolder "DubScribe.app" -ov -format UDZO "DubScribe-macOS-arm64.dmg"
+          zip -ry DubScribe-macOS-arm64.zip DubScribe.app
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release_dmg/DubScribe-macOS-arm64.dmg
+            release_dmg/DubScribe-macOS-arm64.zip

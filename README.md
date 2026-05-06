@@ -1,5 +1,10 @@
 # DubScribe
 
+![macOS](https://img.shields.io/badge/macOS-Apple_Silicon-000000?style=for-the-badge&logo=apple&logoColor=white)
+![Privacy](https://img.shields.io/badge/Privacy-Local_Only-238636?style=for-the-badge&logo=lock&logoColor=white)
+![Telemetry](https://img.shields.io/badge/Telemetry-None-238636?style=for-the-badge)
+![Build](https://img.shields.io/badge/Build-Transparent-007EC6?style=for-the-badge&logo=githubactions&logoColor=white)
+
 **DubScribe** is a tiny macOS utility for quickly recording short WAV audio clips and copying them straight to the clipboard.
 
 The core workflow is simple:
@@ -125,11 +130,16 @@ Some broader tools can record audio, video, screenshots, and copy media to the c
 
 ---
 
-## Privacy
+## Privacy & Security
 
-DubScribe is designed as a local macOS utility.
+DubScribe is a local-only utility designed for maximum transparency.
 
-Audio is recorded locally and saved as WAV files on your Mac. There is no account system, cloud sync, or transcription service built into the core workflow.
+✅ **100% Offline:** Zero internet connections, no cloud sync, and no APIs.  
+✅ **Local Storage:** Files are written straight to your local sandbox (`~/Library/Containers/`).  
+✅ **Blind Hotkeys:** Uses Carbon APIs (`RegisterEventHotKey`) so it doesn't need invasive Accessibility permissions to monitor your keyboard.  
+❌ **No AI Models:** Zero speech-to-text or semantic processing. "Voice Activation" just mathematically measures microphone volume.  
+❌ **No Telemetry:** Zero crash reporters or product analytics.  
+❌ **No Keylogging:** It only responds to the exact shortcut you configure.  
 
 ---
 
@@ -163,4 +173,4 @@ DubScribe is released under the MIT License.
 ## Support
 
 If you find DubScribe useful, consider buying me a coffee!  
-[☕️ Buy Me A Coffee](https://ko-fi.com/dangercharlie)
+☕️ [Buy Me A Coffee](https://ko-fi.com/dangercharlie)
