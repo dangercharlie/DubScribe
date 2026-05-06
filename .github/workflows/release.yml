@@ -19,7 +19,7 @@ jobs:
 
       - name: Package into DMG and ZIP
         run: |
-          mkdir release_dmg
+          mkdir -p release_dmg
           cp -R build/Build/Products/Release/DubScribe.app release_dmg/
           cd release_dmg
           hdiutil create -volname "DubScribe" -srcfolder "DubScribe.app" -ov -format UDZO "DubScribe-macOS-arm64.dmg"
