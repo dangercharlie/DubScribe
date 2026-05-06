@@ -1,8 +1,10 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/macOS-Apple_Silicon-000000?style=flat&logo=apple&logoColor=white" alt="macOS" />
-  <img src="https://img.shields.io/badge/Privacy-Local_Only-238636?style=flat&logo=lock&logoColor=white" alt="Privacy" /><br/>
-  <img src="https://img.shields.io/badge/Telemetry-None-238636?style=flat" alt="Telemetry" />
-  <img src="https://img.shields.io/badge/Build-Transparent-007EC6?style=flat&logo=githubactions&logoColor=white" alt="Build" />
+  <a name="badges">
+    <img src="https://img.shields.io/badge/macOS-Apple_Silicon-000000?style=flat&logo=apple&logoColor=white" alt="macOS" />
+    <img src="https://img.shields.io/badge/Privacy-Local_Only-238636?style=flat&logo=lock&logoColor=white" alt="Privacy" /><br/>
+    <img src="https://img.shields.io/badge/Telemetry-None-238636?style=flat" alt="Telemetry" />
+    <img src="https://img.shields.io/badge/Build-Transparent-007EC6?style=flat&logo=githubactions&logoColor=white" alt="Build" />
+  </a>
 </p>
 
 **DubScribe** is a tiny macOS utility for quickly recording short WAV audio clips and copying them straight to the clipboard.
