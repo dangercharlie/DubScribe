@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: macos-latest # Uses an Apple Silicon Mac hosted by GitHub
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Code
