@@ -4,17 +4,19 @@
   <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Privacy-Local_Only-238636?style=flat&logo=lock&logoColor=white" alt="Privacy" /></a>
   <br/>
   <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Build-Transparent-007EC6?style=flat&logo=githubactions&logoColor=white" alt="Build" /></a>
-  <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Accessibility-VoiceOver_Ready-007EC6?style=flat&logo=apple&logoColor=white" alt="Accessibility" /></a>
+  <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Accessibility-Active_Testing-007EC6?style=flat&logo=apple&logoColor=white" alt="Accessibility active testing" /></a>
   <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Vibe_Coded-Human_Reviewed-007EC6?style=flat" alt="Vibe Coded" /></a>
 </p>
 
-**DubScribe** is a tiny macOS utility for quickly recording short WAV audio clips and copying them straight to the clipboard.
+**DubScribe** is a lightweight macOS utility for low-friction audio capture.
 
 The core workflow is simple:
 
-> Press a hotkey → speak → release/stop → WAV is copied to the clipboard → paste with `Cmd + V`
+> Shortcut → record → paste
 
-It is designed for moments when you do not want to open a full audio editor, manage a voice memo library, export a file manually, or transcribe your voice into text. DubScribe is for capturing the actual audio clip as a pasteable file.
+It is designed for moments when you want to capture a short audio clip without opening a full audio editor, managing a voice memo library, exporting a file manually, or transcribing your voice into text.
+
+DubScribe captures the original audio as a pasteable WAV file.
 
 <p align="center">
   <img src="screenshots/main_window.png" width="350" alt="DubScribe main window showing a green success checkmark, 'Copied to clipboard' message, and playback controls for the last recorded audio clip." />
@@ -26,37 +28,47 @@ It is designed for moments when you do not want to open a full audio editor, man
 
 ## Why?
 
-macOS has several ways to record audio, but most are built around longer recordings, manual saving, or transcription.
+macOS has plenty of ways to record audio, but most involve opening another app, saving or exporting a file, finding it, then attaching or dragging it somewhere.
 
 DubScribe solves a narrower problem:
 
-- I want to record a very short voice/audio clip.
-- I want it saved as a `.wav`.
-- I want it immediately on the clipboard.
-- I want to paste it somewhere with `Cmd + V`.
-- I do not want to hunt through folders, export menus, or drag files around.
+> I want to capture a short audio clip and paste it immediately.
+
+It is designed for low-clutter workflows where reducing small steps matters — especially if file hunting, extra windows, save dialogs, or context switching create friction.
 
 Think of it like a screenshot tool, but for quick WAV audio snippets.
 
 ---
 
+## Low-Clutter Workflow
+
+DubScribe is built around reducing small workflow costs.
+
+The intended loop is:
+
+> configure once → use a shortcut → paste the result
+
+This may be useful for people who prefer predictable, low-interruption workflows, including users who experience ADHD-related task switching, cognitive overload, or file-management clutter.
+
+DubScribe is not trying to replace platform accessibility tools. It is a focused utility for quickly creating a pasteable audio file with minimal context switching.
+
+---
+
 ## Features
 
-- Native macOS app
+- Native macOS app built with SwiftUI
 - Apple Silicon focused
-- Built with Xcode
 - Records short WAV audio clips
-- Copies the finished WAV file to the clipboard automatically
-- Global hotkey recording (Uses Carbon APIs — no annoying Accessibility permissions required!)
-- Push-to-record and hold-to-record style workflows
+- Automatically copies finished recordings to the clipboard
+- Global hotkey recording
+- Push-to-record and hold-to-record workflows
 - Menu bar utility design
 - Last recording preview/playback
-- Reveal last recording in Finder
 - Input source selection
 - Voice activation support
 - Mic test / input feedback
 - Launch at login
-- Minimal keyboard accessibility support
+- Local-only: no cloud, telemetry, AI, or transcription
 
 ---
 
@@ -107,21 +119,10 @@ The threshold slider helps avoid accidental recordings from background noise.
 
 DubScribe is intentionally small and specific.
 
-### Apple Voice Memos
-
-Voice Memos is great for longer personal recordings, but it is not built around hotkey-triggered capture or instant WAV-to-clipboard workflows.
-
-### QuickTime / traditional recorders
-
-Traditional macOS recording tools can capture audio, but usually require opening an app, starting a recording manually, saving/exporting, and then locating the file.
-
-### Dictation and speech-to-text apps
-
-Many modern Mac voice tools focus on turning speech into text and pasting the transcription. DubScribe keeps the original audio as a WAV file instead.
-
-### Larger media capture tools
-
-Some broader tools can record audio, video, screenshots, and copy media to the clipboard. DubScribe is deliberately simpler: it focuses only on quick microphone WAV capture.
+- Voice Memos is better for longer personal recordings, but not instant hotkey-to-clipboard capture.
+- QuickTime and traditional recorders can capture audio, but usually involve manual saving, exporting, and file hunting.
+- Dictation tools turn speech into text. DubScribe keeps the original audio as a pasteable WAV.
+- Larger capture tools may handle screenshots, video, and audio. DubScribe only focuses on quick microphone WAV capture.
 
 ---
 
@@ -148,14 +149,17 @@ DubScribe is a local-only utility designed for maximum transparency.
 
 ## Accessibility
 
-DubScribe is designed to be fully navigable for users relying on VoiceOver and other assistive technologies.
+DubScribe aims to support simple keyboard and VoiceOver-friendly workflows.
 
-- **Native UI Controls**: Built entirely with SwiftUI, ensuring all buttons, toggles, and layouts are natively exposed to the macOS accessibility tree.
-- **Semantic Labels**: Icon-only buttons (like play/pause and settings) are equipped with explicit, descriptive hidden text for screen readers.
-- **Dynamic Values**: Sliders representing thresholds and delays announce human-readable values (e.g., "50 percent" or "1.5 seconds") rather than raw floating-point numbers.
-- **Decorative Clutter Hidden**: Visual-only elements like the recording pulse rings and waveform meters are strictly hidden from VoiceOver to prevent audio clutter and keep navigation fast.
+Current accessibility work includes:
 
-*(If you encounter any accessibility bugs or missing traits, please open an issue!)*
+- Native SwiftUI controls where possible
+- Descriptive labels for icon-only buttons
+- Human-readable slider values
+- Decorative visual elements hidden from VoiceOver
+- A workflow designed to avoid unnecessary windows, save dialogs, and file browsing
+
+Feedback from VoiceOver users, keyboard-only users, and neurodivergent users is very welcome.
 
 ---
 
