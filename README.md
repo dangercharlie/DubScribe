@@ -1,9 +1,10 @@
 <p align="center">
   <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/macOS-Apple_Silicon-000000?style=flat&logo=apple&logoColor=white" alt="macOS" /></a>
-  <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Privacy-Local_Only-238636?style=flat&logo=lock&logoColor=white" alt="Privacy" /></a>
-  <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Accessibility-VoiceOver_Ready-007EC6?style=flat&logo=apple&logoColor=white" alt="Accessibility" /></a><br/>
   <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Telemetry-None-238636?style=flat" alt="Telemetry" /></a>
+  <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Privacy-Local_Only-238636?style=flat&logo=lock&logoColor=white" alt="Privacy" /></a>
+  <br/>
   <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Build-Transparent-007EC6?style=flat&logo=githubactions&logoColor=white" alt="Build" /></a>
+  <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Accessibility-VoiceOver_Ready-007EC6?style=flat&logo=apple&logoColor=white" alt="Accessibility" /></a>
 </p>
 
 **DubScribe** is a tiny macOS utility for quickly recording short WAV audio clips and copying them straight to the clipboard.
