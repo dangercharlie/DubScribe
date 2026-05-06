@@ -1,6 +1,7 @@
 <p align="center">
   <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/macOS-Apple_Silicon-000000?style=flat&logo=apple&logoColor=white" alt="macOS" /></a>
-  <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Privacy-Local_Only-238636?style=flat&logo=lock&logoColor=white" alt="Privacy" /></a><br/>
+  <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Privacy-Local_Only-238636?style=flat&logo=lock&logoColor=white" alt="Privacy" /></a>
+  <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Accessibility-VoiceOver_Ready-007EC6?style=flat&logo=apple&logoColor=white" alt="Accessibility" /></a><br/>
   <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Telemetry-None-238636?style=flat" alt="Telemetry" /></a>
   <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Build-Transparent-007EC6?style=flat&logo=githubactions&logoColor=white" alt="Build" /></a>
 </p>
@@ -140,6 +141,19 @@ DubScribe is a local-only utility designed for maximum transparency.
 ❌ **No AI Models:** Zero speech-to-text or semantic processing. "Voice Activation" just mathematically measures microphone volume.  
 ❌ **No Telemetry:** Zero crash reporters or product analytics.  
 ❌ **No Keylogging:** It only responds to the exact shortcut you configure.  
+
+---
+
+## Accessibility
+
+DubScribe is designed to be fully navigable for users relying on VoiceOver and other assistive technologies.
+
+- **Native UI Controls**: Built entirely with SwiftUI, ensuring all buttons, toggles, and layouts are natively exposed to the macOS accessibility tree.
+- **Semantic Labels**: Icon-only buttons (like play/pause and settings) are equipped with explicit, descriptive hidden text for screen readers.
+- **Dynamic Values**: Sliders representing thresholds and delays announce human-readable values (e.g., "50 percent" or "1.5 seconds") rather than raw floating-point numbers.
+- **Decorative Clutter Hidden**: Visual-only elements like the recording pulse rings and waveform meters are strictly hidden from VoiceOver to prevent audio clutter and keep navigation fast.
+
+*(If you encounter any accessibility bugs or missing traits, please open an issue!)*
 
 ---
 

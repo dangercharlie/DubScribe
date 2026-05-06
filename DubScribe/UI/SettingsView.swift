@@ -137,7 +137,6 @@ struct SettingsView: View {
                                 }
                                 .toggleStyle(CustomToggleStyle())
                                 .onChange(of: coordinator.settings.playSounds) { _ in coordinator.applySettings() }
-                                .accessibilityLabel("Play sounds on record and stop")
                             }
                         }
 
@@ -157,7 +156,6 @@ struct SettingsView: View {
                                 .onChange(of: coordinator.settings.voiceActivationEnabled) { _ in
                                     coordinator.applySettings()
                                 }
-                                .accessibilityLabel("Enable voice activation")
 
                                 if coordinator.settings.voiceActivationEnabled {
                                     Divider().background(Color.white.opacity(0.06))
@@ -241,7 +239,6 @@ struct SettingsView: View {
                                         .settingsLabel()
                                 }
                                 .toggleStyle(CustomToggleStyle())
-                                .accessibilityLabel("Launch DubScribe at login")
 
                                 Divider().background(Color.white.opacity(0.06))
 
@@ -436,7 +433,6 @@ struct SettingsView: View {
                     .buttonStyle(SettingsGhostButtonStyle())
             }
         }
-        .accessibilityLabel(granted ? "\(title) permission granted" : "\(title) permission required")
     }
 }
 

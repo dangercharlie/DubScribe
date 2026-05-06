@@ -286,7 +286,6 @@ struct ContentView: View {
         }
         .buttonStyle(.plain)
         .animation(.easeInOut(duration: 0.2), value: state.isRecording)
-        .accessibilityLabel(state.isRecording ? "Stop recording" : "Start recording")
         .help(state.isRecording ? "Stop and save the current recording." : "Start recording audio from the selected microphone.")
     }
 
@@ -346,7 +345,6 @@ struct ContentView: View {
                     Spacer()
                     Button("Reveal in Finder") { coordinator.revealLastClip() }
                         .buttonStyle(GhostButtonStyle())
-                        .accessibilityLabel("Reveal last recording in Finder")
                         .help("Reveal last recording in Finder")
                 }
             }
@@ -591,8 +589,5 @@ struct PermissionRowView: View {
                             : Color.orange.opacity(0.25),
                             lineWidth: 1))
         )
-        .accessibilityLabel(granted
-                            ? "\(label) permission granted"
-                            : "\(label) permission required — tap Enable")
     }
 }
