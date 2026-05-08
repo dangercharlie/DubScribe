@@ -4,6 +4,8 @@ import AppKit
 @main
 struct DubScribeApp: App {
 
+    @Environment(\.openWindow) private var openWindow
+    @AppStorage("showMenuBarIcon") private var showMenuBarIcon = true
     @StateObject private var coordinator = AppCoordinator()
 
     var body: some Scene {
@@ -15,9 +17,15 @@ struct DubScribeApp: App {
         .defaultPosition(.center)
         .commands {
             CommandGroup(replacing: .newItem) { }
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings...") {
+                    openSettingsWindow()
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
         }
 
-        MenuBarExtra {
+        MenuBarExtra(isInserted: $showMenuBarIcon) {
             MenuBarView()
                 .environmentObject(coordinator)
         } label: {
@@ -36,5 +44,11 @@ struct DubScribeApp: App {
 
         Image(systemName: isRecording ? "mic.fill" : (isListening ? "ear" : "mic"))
             .foregroundStyle(isRecording ? Color.red : (isListening ? Color(hue: 0.62, saturation: 0.6, brightness: 0.8) : Color.primary))
+    }
+
+    private func openSettingsWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        openWindow(id: "main")
+        coordinator.isSettingsOpen = true
     }
 }

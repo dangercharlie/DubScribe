@@ -21,11 +21,12 @@ jobs:
 
       - name: Package into DMG and ZIP
         run: |
-          mkdir -p release_dmg
-          cp -R build/Build/Products/Release/DubScribe.app release_dmg/
-          cd release_dmg
-          hdiutil create -volname "DubScribe" -srcfolder "DubScribe.app" -ov -format UDZO "DubScribe-macOS-arm64.dmg"
-          zip -ry DubScribe-macOS-arm64.zip DubScribe.app
+          mkdir -p release_dmg/staging
+          cp -R build/Build/Products/Release/DubScribe.app release_dmg/staging/
+          ln -s /Applications release_dmg/staging/Applications
+          hdiutil create -volname "DubScribe" -srcfolder "release_dmg/staging" -ov -format UDZO "release_dmg/DubScribe-macOS-arm64.dmg"
+          cd release_dmg/staging
+          zip -ry ../DubScribe-macOS-arm64.zip DubScribe.app
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2

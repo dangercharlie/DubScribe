@@ -4,6 +4,7 @@ import Carbon
 struct SettingsView: View {
     @EnvironmentObject var coordinator: AppCoordinator
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("showMenuBarIcon") private var showMenuBarIcon = true
 
     @State private var isRecordingHold = false
     @State private var isRecordingPush = false
@@ -242,6 +243,20 @@ struct SettingsView: View {
 
                                 Divider().background(Color.white.opacity(0.06))
 
+                                Toggle(isOn: $showMenuBarIcon) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Show Menu Bar Icon")
+                                            .settingsLabel()
+                                        Text("Keeps DubScribe available from the macOS menu bar.")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.white.opacity(0.35))
+                                    }
+                                }
+                                .toggleStyle(CustomToggleStyle())
+                                .help("Hide or show the DubScribe icon in the macOS menu bar.")
+
+                                Divider().background(Color.white.opacity(0.06))
+
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("Clips Folder")
@@ -311,7 +326,7 @@ struct SettingsView: View {
                                         Text("DubScribe")
                                             .font(.system(size: 14, weight: .bold))
                                             .foregroundColor(.white)
-                                        Text("Version 0.5.1")
+                                        Text("Version 0.6.1")
                                             .font(.system(size: 11))
                                             .foregroundColor(.white.opacity(0.5))
                                     }
