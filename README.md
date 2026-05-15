@@ -218,4 +218,4 @@ DubScribe is released under the MIT License.
 ## Support
 
 If you find DubScribe useful, consider buying me a coffee!  
-[Buy Me A Coffee](https://ko-fi.com/dangercharlie)
+☕️ [Buy Me A Coffee](https://ko-fi.com/dangercharlie)
