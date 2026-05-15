@@ -67,6 +67,7 @@ DubScribe is not trying to replace platform accessibility tools. It is a focused
 - Input source selection
 - Voice activation support
 - Mic test / input feedback
+- Optional media pause/resume while recording
 - Launch at login
 - Local-only: no cloud, telemetry, AI, or transcription
 
@@ -77,6 +78,12 @@ DubScribe is not trying to replace platform accessibility tools. It is a focused
 1. Download the latest `.dmg` from the [Releases](https://github.com/dangercharlie/DubScribe/releases) page.
 2. Open the `.dmg` and drag **DubScribe** to your `Applications` folder.
 3. Launch DubScribe. *(Note: Since this is an unsigned indie app, you may need to Right-Click -> Open the first time, or allow it in System Settings -> Privacy & Security).*
+
+---
+
+## What's Changed
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ---
 
