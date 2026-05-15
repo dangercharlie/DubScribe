@@ -1,11 +1,9 @@
 <p align="center">
-  <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/macOS-Apple_Silicon-000000?style=flat&logo=apple&logoColor=white" alt="macOS" /></a>
-  <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Telemetry-None-238636?style=flat" alt="Telemetry" /></a>
-  <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Privacy-Local_Only-238636?style=flat&logo=lock&logoColor=white" alt="Privacy" /></a>
-  <br/>
-  <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Build-Transparent-007EC6?style=flat&logo=githubactions&logoColor=white" alt="Build" /></a>
-  <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Accessibility-Active_Testing-007EC6?style=flat&logo=apple&logoColor=white" alt="Accessibility active testing" /></a>
-  <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Vibe_Coded-Human_Reviewed-007EC6?style=flat" alt="Vibe Coded" /></a>
+  <a href="https://github.com/dangercharlie/DubScribe/releases"><img src="https://img.shields.io/github/v/release/dangercharlie/DubScribe?label=release&style=flat" alt="Latest release" /></a>
+  <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/macOS-13%2B-000000?style=flat&logo=apple&logoColor=white" alt="macOS 13 or later" /></a>
+  <a href="https://github.com/dangercharlie/homebrew-tap"><img src="https://img.shields.io/badge/Homebrew-cask-FBB040?style=flat&logo=homebrew&logoColor=black" alt="Homebrew cask" /></a>
+  <a href="https://github.com/dangercharlie/DubScribe"><img src="https://img.shields.io/badge/Local_only-no_cloud-238636?style=flat" alt="Local-only, no cloud" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/dangercharlie/DubScribe?style=flat" alt="License" /></a>
 </p>
 
 **DubScribe** is a lightweight macOS utility for low-friction audio capture.
@@ -161,14 +159,14 @@ DubScribe is intentionally small and specific.
 
 ## Privacy & Security
 
-DubScribe is a local-only utility designed for maximum transparency.
+DubScribe is a local-only utility designed for transparency.
 
-✅ **100% Offline:** Zero internet connections, no cloud sync, and no APIs.  
-✅ **Local Storage:** Files are written straight to your local sandbox (`~/Library/Containers/`).  
-✅ **Blind Hotkeys:** Uses Carbon APIs (`RegisterEventHotKey`) so it doesn't need invasive Accessibility permissions to monitor your keyboard.  
-❌ **No AI Models:** Zero speech-to-text or semantic processing. "Voice Activation" just mathematically measures microphone volume.  
-❌ **No Telemetry:** Zero crash reporters or product analytics.  
-❌ **No Keylogging:** It only responds to the exact shortcut you configure.  
+- **Offline:** no cloud sync, APIs, or network services are used by the app.
+- **Local storage:** recordings are written to your local app container (`~/Library/Containers/`).
+- **Hotkeys:** uses Carbon APIs (`RegisterEventHotKey`) for the shortcuts you configure.
+- **No transcription:** voice activation measures microphone volume; it does not convert speech to text.
+- **No telemetry:** no crash reporters, product analytics, or usage tracking.
+- **No keylogging:** DubScribe only responds to its configured recording shortcuts.
 
 ---
 
@@ -195,6 +193,8 @@ DubScribe was created as a small native macOS app experiment using Xcode and AI-
 Initial product brief and iteration prompts were written with ChatGPT.  
 The working app was generated and refined in Antigravity using Claude Sonnet 4.6.
 
+This is a vibe-coded project in the plain sense: AI-assisted, human-reviewed, and tested through real use.
+
 The goal was to see whether a focused native utility could be built quickly from a clear product brief:
 
 > Make a simple macOS app where a hotkey records a short WAV clip and automatically copies it to the clipboard.
@@ -218,4 +218,4 @@ DubScribe is released under the MIT License.
 ## Support
 
 If you find DubScribe useful, consider buying me a coffee!  
-☕️ [Buy Me A Coffee](https://ko-fi.com/dangercharlie)
+[Buy Me A Coffee](https://ko-fi.com/dangercharlie)
