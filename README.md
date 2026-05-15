@@ -21,7 +21,11 @@ DubScribe captures the original audio as a pasteable WAV file.
 <p align="center">
   <img src="screenshots/main_window.png" width="350" alt="DubScribe main window showing a green success checkmark, 'Copied to clipboard' message, and playback controls for the last recorded audio clip." />
   &nbsp;&nbsp;&nbsp;
-  <img src="screenshots/settings_window.png" width="350" alt="DubScribe settings window displaying options for customizable recording shortcuts, audio input device selection, voice activation toggle, and a live microphone test meter." />
+  <img src="screenshots/settings_window.png" width="350" alt="DubScribe settings window showing recording shortcuts, audio input, mute system audio, pause media playback, and a resume delay slider from instant to one second." />
+</p>
+
+<p align="center">
+  <em>Settings include recording shortcuts, audio input selection, optional mute system audio, pause media playback, and a resume crossover delay slider from 0.0s to 1.0s.</em>
 </p>
 
 ---
