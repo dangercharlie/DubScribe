@@ -140,7 +140,77 @@ struct SettingsView: View {
                             }
                         }
 
-                        // 3. Voice Activation
+                        // 3. Recording Behavior
+                        settingsSection("Recording Behavior") {
+                            VStack(spacing: 12) {
+                                Toggle(isOn: $coordinator.settings.muteSystemAudioDuringRecording) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Mute System Audio")
+                                            .settingsLabel()
+                                        Text("Automatically mutes output while recording, restores on stop.")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.white.opacity(0.35))
+                                    }
+                                }
+                                .toggleStyle(CustomToggleStyle())
+                                .onChange(of: coordinator.settings.muteSystemAudioDuringRecording) { _ in
+                                    coordinator.applySettings()
+                                }
+
+                                Divider().background(Color.white.opacity(0.06))
+
+                                Toggle(isOn: $coordinator.settings.pauseMediaDuringRecording) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Pause Media Playback")
+                                            .settingsLabel()
+                                        Text("Pauses Spotify, Music, or system media when recording starts.")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.white.opacity(0.35))
+                                    }
+                                }
+                                .toggleStyle(CustomToggleStyle())
+                                .onChange(of: coordinator.settings.pauseMediaDuringRecording) { _ in
+                                    coordinator.applySettings()
+                                }
+
+                                if coordinator.settings.pauseMediaDuringRecording {
+                                    Divider().background(Color.white.opacity(0.06))
+
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        HStack {
+                                            Text("Resume Delay")
+                                                .settingsLabel()
+                                            Spacer()
+                                            Text(String(format: "%.1fs", coordinator.settings.mediaResumeDelay))
+                                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                                .foregroundColor(.white.opacity(0.5))
+                                        }
+                                        Slider(
+                                            value: $coordinator.settings.mediaResumeDelay,
+                                            in: 0.0...1.0,
+                                            step: 0.1
+                                        )
+                                        .accentColor(Color(hue: 0.62, saturation: 0.6, brightness: 0.7))
+                                        .onChange(of: coordinator.settings.mediaResumeDelay) { _ in
+                                            coordinator.applySettings()
+                                        }
+                                        .accessibilityLabel("Media resume delay")
+                                        .accessibilityValue(String(format: "%.1f seconds", coordinator.settings.mediaResumeDelay))
+                                        .help("How long to wait after stopping before resuming media playback.")
+                                        HStack {
+                                            Text("Instant").font(.system(size: 9)).foregroundColor(.white.opacity(0.3))
+                                            Spacer()
+                                            Text("1 second").font(.system(size: 9)).foregroundColor(.white.opacity(0.3))
+                                        }
+                                        Text("Crossover delay before resuming media. Prevents overlap with recording tail.")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.white.opacity(0.35))
+                                    }
+                                }
+                            }
+                        }
+
+                        // 4. Voice Activation
                         settingsSection("Voice Activation") {
                             VStack(spacing: 12) {
                                 Toggle(isOn: $coordinator.settings.voiceActivationEnabled) {
@@ -221,14 +291,14 @@ struct SettingsView: View {
                             }
                         }
 
-                        // 3b. Mic Test
+                        // 4b. Mic Test
                         MicTestSectionView(
                             micTestManager: coordinator.micTestManager,
                             threshold: $coordinator.settings.voiceActivationThreshold,
                             isRealRecordingActive: coordinator.micTestManager.isRealRecordingActive
                         )
 
-                        // 4. General
+                        // 5. General
                         settingsSection("General") {
                             VStack(spacing: 10) {
                                 Toggle(isOn: Binding(
@@ -260,7 +330,7 @@ struct SettingsView: View {
                             }
                         }
 
-                        // 5. Permissions
+                        // 6. Permissions
                         settingsSection("Permissions") {
                             VStack(spacing: 10) {
                                 settingsPermissionRow(
@@ -269,6 +339,17 @@ struct SettingsView: View {
                                     description: "Required to record audio.",
                                     granted: PermissionHelpers.isMicrophoneAuthorized,
                                     action: { PermissionHelpers.openMicrophoneSettings() }
+                                )
+                                settingsPermissionRow(
+                                    icon: "playpause.fill",
+                                    title: "Media Keys",
+                                    description: "Required to pause browser or Now Playing audio.",
+                                    granted: PermissionHelpers.isMediaKeyControlAuthorized,
+                                    action: {
+                                        if !PermissionHelpers.requestMediaKeyControlPermission() {
+                                            PermissionHelpers.openAccessibilitySettings()
+                                        }
+                                    }
                                 )
                                 // Carbon hotkeys don't need Accessibility
                                 HStack(spacing: 12) {
@@ -299,7 +380,7 @@ struct SettingsView: View {
                             }
                         }
 
-                        // 6. About
+                        // 7. About
                         settingsSection("About") {
                             VStack(spacing: 10) {
                                 HStack(spacing: 16) {

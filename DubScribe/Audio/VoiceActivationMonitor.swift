@@ -50,7 +50,26 @@ final class VoiceActivationMonitor: ObservableObject {
     }
 
     private func handleLevel(_ level: Float) {
-        guard !isCurrentlyRecording else { return }
+        // During an active recording, we still need silence detection running
+        // so voice-activated recordings can auto-stop. We only block NEW voice
+        // start triggers — silence detection continues.
+        if isCurrentlyRecording {
+            // Only process silence detection while recording, not new voice starts
+            if isVoiceActive && level < threshold && silenceTimer == nil {
+                silenceTimer = Timer.scheduledTimer(withTimeInterval: stopDelay, repeats: false) { [weak self] _ in
+                    Task { @MainActor in
+                        self?.isVoiceActive = false
+                        self?.cancelSilenceTimer()
+                        self?.onVoiceStopped?()
+                    }
+                }
+            } else if level >= threshold {
+                // Voice resumed during recording — cancel any pending stop
+                cancelSilenceTimer()
+            }
+            return
+        }
+
         if let last = lastStopTime, Date().timeIntervalSince(last) < cooldown { return }
 
         if level >= threshold {

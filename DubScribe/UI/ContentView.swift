@@ -42,8 +42,8 @@ struct ContentView: View {
             permissionsExpanded = !allGranted
         }
         .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
-            if state.isRecording {
-                displayDuration = coordinator.audioRecorder.recordingDuration
+            if let startedAt = state.startedAt {
+                displayDuration = Date().timeIntervalSince(startedAt)
             } else {
                 displayDuration = 0
             }
@@ -121,7 +121,7 @@ struct ContentView: View {
     private var recordingIndicator: some View {
         ZStack {
             if state.isRecording {
-                // Outer pulse ring — only during active recording
+                // Outer pulse ring - only during active recording
                 Circle()
                     .stroke(Color.red.opacity(0.3), lineWidth: 2)
                     .frame(width: 130, height: 130)
@@ -227,13 +227,13 @@ struct ContentView: View {
             Text(state.displayText)
                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .foregroundColor(.white)
-                .animation(.easeInOut, value: state.displayText)
+                .contentTransition(.identity)
 
             if case .recording = state {
                 Text(durationString(displayDuration))
                     .font(.system(size: 28, weight: .bold, design: .monospaced))
                     .foregroundColor(.red.opacity(0.9))
-                    .transition(.opacity)
+                    .contentTransition(.identity)
                     .accessibilityLabel("Recording duration: \(durationString(displayDuration))")
             } else if coordinator.lastDuration > 0 && !state.isRecording {
                 Text("Last: \(durationString(coordinator.lastDuration))")
@@ -274,6 +274,7 @@ struct ContentView: View {
                 Text(state.isRecording ? "Stop Recording" : "Start Recording")
                     .font(.system(size: 14, weight: .semibold))
             }
+            .contentTransition(.identity)
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
@@ -285,7 +286,6 @@ struct ContentView: View {
             )
         }
         .buttonStyle(.plain)
-        .animation(.easeInOut(duration: 0.2), value: state.isRecording)
         .help(state.isRecording ? "Stop and save the current recording." : "Start recording audio from the selected microphone.")
     }
 

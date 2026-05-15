@@ -25,7 +25,7 @@
 	<key>LSUIElement</key>
 	<false/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>DubScribe uses Accessibility to listen for the global hotkey from any app.</string>
+	<string>DubScribe uses Apple Events to pause and resume media playback in Music and Spotify during recordings.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026. All rights reserved.</string>
 	<key>NSMicrophoneUsageDescription</key>

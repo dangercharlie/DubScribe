@@ -26,6 +26,7 @@
 		AA000018 /* VoiceActivationMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100018 /* VoiceActivationMonitor.swift */; };
 		AA000019 /* MicTestManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100019 /* MicTestManager.swift */; };
 		AA000020 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA100020 /* Assets.xcassets */; };
+		AA000021 /* SystemMediaController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100021 /* SystemMediaController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -49,6 +50,7 @@
 		AA100018 /* VoiceActivationMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceActivationMonitor.swift; sourceTree = "<group>"; };
 		AA100019 /* MicTestManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicTestManager.swift; sourceTree = "<group>"; };
 		AA100020 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AA100021 /* SystemMediaController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemMediaController.swift; sourceTree = "<group>"; };
 		AAPROD001 /* DubScribe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DubScribe.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -157,6 +159,7 @@
 			children = (
 				AA100014 /* FileManagerHelpers.swift */,
 				AA100015 /* PermissionHelpers.swift */,
+				AA100021 /* SystemMediaController.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -265,6 +268,7 @@
 				AA000017 /* AudioPlayer.swift in Sources */,
 				AA000018 /* VoiceActivationMonitor.swift in Sources */,
 				AA000019 /* MicTestManager.swift in Sources */,
+				AA000021 /* SystemMediaController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -15,5 +15,9 @@
 
 	<!-- Hardened runtime: JIT not needed -->
 	<!-- Hardened runtime: unsigned executable memory not needed -->
+
+	<!-- Allow sending Apple Events to Music, Spotify, and System Events -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
 </dict>
 </plist>

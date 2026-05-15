@@ -18,9 +18,12 @@ final class AppCoordinator: ObservableObject {
     let hotkeyManager           = HotkeyManager()
     let loginItemManager        = LoginItemManager()
     let voiceActivationMonitor  = VoiceActivationMonitor()
+    let systemMediaController   = SystemMediaController()
     lazy var micTestManager     = MicTestManager(audioRecorder: audioRecorder)
 
     private var cancellables = Set<AnyCancellable>()
+    private var pendingStartTask: Task<Void, Never>?
+    private var pendingMediaPauseTask: Task<Void, Never>?
 
     init() {
         // Wire voice monitor to use the recorder's level
@@ -82,13 +85,40 @@ final class AppCoordinator: ObservableObject {
         case .authorized:
             recordingState = .recording(startedAt: Date(), trigger: trigger)
             audioRecorder.selectedInputDeviceID = settings.selectedInputDeviceID
-            // Start level monitoring so voice activation works during recording
-            audioRecorder.startLevelMonitoring()
-            audioRecorder.startRecording()
-            voiceActivationMonitor.setRecordingActive(true)
-            micTestManager.isRealRecordingActive = true
-            playSound(named: "Tink")
-            print("[DubScribe] Recording started (trigger=\(trigger))")
+            let shouldMuteSystemAudio = settings.muteSystemAudioDuringRecording
+            let shouldPauseMedia = settings.pauseMediaDuringRecording
+
+            pendingStartTask?.cancel()
+            pendingMediaPauseTask?.cancel()
+            pendingStartTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 16_000_000)
+                guard let self, !Task.isCancelled, self.recordingState.isRecording else { return }
+
+                // Stop the monitor engine before starting the recording engine
+                // to avoid two AVAudioEngines on the same input device.
+                // The recording engine's own buffer tap updates inputLevel,
+                // so the voice activation monitor can still detect silence.
+                self.audioRecorder.stopLevelMonitoring()
+                self.audioRecorder.startRecording()
+                self.voiceActivationMonitor.setRecordingActive(true)
+                self.micTestManager.isRealRecordingActive = true
+
+                self.playSound(named: "Tink")
+                print("[DubScribe] Recording started (trigger=\(trigger))")
+
+                if shouldMuteSystemAudio || shouldPauseMedia {
+                    self.pendingMediaPauseTask = Task { @MainActor [weak self] in
+                        try? await Task.sleep(nanoseconds: 120_000_000)
+                        guard let self, !Task.isCancelled, self.recordingState.isRecording else { return }
+                        if shouldMuteSystemAudio {
+                            await self.systemMediaController.muteSystemAudio()
+                        }
+                        if shouldPauseMedia {
+                            await self.systemMediaController.pauseMedia()
+                        }
+                    }
+                }
+            }
 
         case .notDetermined:
             PermissionHelpers.requestMicrophonePermission { [weak self] granted in
@@ -103,12 +133,44 @@ final class AppCoordinator: ObservableObject {
 
     func stopRecording() {
         guard recordingState.isRecording else { return }
+        pendingStartTask?.cancel()
+        pendingStartTask = nil
+        pendingMediaPauseTask?.cancel()
+        pendingMediaPauseTask = nil
+        let recorderWasActive = audioRecorder.isRecording
         recordingState = .processing
         lastDuration = audioRecorder.recordingDuration
+
+        guard recorderWasActive else {
+            recordingState = .idle
+            return
+        }
+
         audioRecorder.stopLevelMonitoring()
         audioRecorder.stopRecording()
         voiceActivationMonitor.setRecordingActive(false)
         micTestManager.isRealRecordingActive = false
+
+        let shouldRestoreSystemAudio = settings.muteSystemAudioDuringRecording
+        let shouldResumeMedia = settings.pauseMediaDuringRecording
+        if shouldRestoreSystemAudio || shouldResumeMedia {
+            let delay = settings.mediaResumeDelay
+            let systemMediaController = systemMediaController
+            Task {
+                if shouldRestoreSystemAudio {
+                    await systemMediaController.restoreSystemAudio()
+                }
+                // Resume media with configurable crossover delay.
+                // This is stop-side only; it should not affect recording startup.
+                if shouldResumeMedia {
+                    if delay > 0 {
+                        try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    }
+                    await systemMediaController.resumeMedia()
+                }
+            }
+        }
+
         playSound(named: "Pop")
     }
 
