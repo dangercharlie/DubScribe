@@ -83,6 +83,20 @@ DubScribe is not trying to replace platform accessibility tools. It is a focused
 2. Open the `.dmg` and drag **DubScribe** to your `Applications` folder.
 3. Launch DubScribe. *(Note: Since this is an unsigned indie app, you may need to Right-Click -> Open the first time, or allow it in System Settings -> Privacy & Security).*
 
+### Terminal Install
+
+You can also install the latest release from Terminal:
+
+```bash
+tmp="$(mktemp -d)" && curl -L "https://github.com/dangercharlie/DubScribe/releases/latest/download/DubScribe-macOS-arm64.zip" -o "$tmp/DubScribe.zip" && ditto -x -k "$tmp/DubScribe.zip" "$tmp" && rm -rf /Applications/DubScribe.app && cp -R "$tmp/DubScribe.app" /Applications/ && open /Applications/DubScribe.app
+```
+
+If macOS still flags the app after install, you can remove quarantine from only DubScribe:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/DubScribe.app
+```
+
 ---
 
 ## What's Changed

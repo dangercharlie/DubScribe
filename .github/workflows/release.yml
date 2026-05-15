@@ -19,13 +19,27 @@ jobs:
         run: |
           xcodebuild -project DubScribe.xcodeproj -scheme DubScribe -configuration Release clean build -derivedDataPath build
 
+      - name: Install Packaging Tool
+        run: |
+          brew install create-dmg
+
       - name: Package into DMG and ZIP
         run: |
-          mkdir -p release_dmg
-          cp -R build/Build/Products/Release/DubScribe.app release_dmg/
-          cd release_dmg
-          hdiutil create -volname "DubScribe" -srcfolder "DubScribe.app" -ov -format UDZO "DubScribe-macOS-arm64.dmg"
-          zip -ry DubScribe-macOS-arm64.zip DubScribe.app
+          mkdir -p release_dmg/staging
+          cp -R build/Build/Products/Release/DubScribe.app release_dmg/staging/
+          create-dmg \
+            --volname "DubScribe" \
+            --window-pos 200 120 \
+            --window-size 620 360 \
+            --icon-size 128 \
+            --icon "DubScribe.app" 160 165 \
+            --hide-extension "DubScribe.app" \
+            --app-drop-link 460 165 \
+            --no-internet-enable \
+            "release_dmg/DubScribe-macOS-arm64.dmg" \
+            "release_dmg/staging"
+          cd release_dmg/staging
+          zip -ry ../DubScribe-macOS-arm64.zip DubScribe.app
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
