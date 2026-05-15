@@ -311,7 +311,7 @@ struct SettingsView: View {
                                         Text("DubScribe")
                                             .font(.system(size: 14, weight: .bold))
                                             .foregroundColor(.white)
-                                        Text("Version 0.5.1")
+                                        Text("Version 0.6.2")
                                             .font(.system(size: 11))
                                             .foregroundColor(.white.opacity(0.5))
                                     }
