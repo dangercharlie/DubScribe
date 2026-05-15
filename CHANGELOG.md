@@ -3,7 +3,7 @@
 ## v0.6.4
 
 - Improved the release DMG layout with a standard drag-to-Applications install window.
-- Added a Terminal install command using the release ZIP.
+- Added a Homebrew cask install path.
 - Bumped the app version to 0.6.4, build 10.
 
 ## v0.6.3
