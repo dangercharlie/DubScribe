@@ -56,6 +56,9 @@ final class AppCoordinator: ObservableObject {
     /// Retained so the observation could be torn down with the coordinator.
     private var activationObserver: NSObjectProtocol?
 
+    /// Guards against stacking a second permission alert while one is up.
+    private var isShowingMicrophoneAlert = false
+
     init() {
         // Settings first — policy below depends on them.
         switch AppSettings.loadResult() {
@@ -200,13 +203,51 @@ final class AppCoordinator: ObservableObject {
         case .notDetermined:
             PermissionHelpers.requestMicrophonePermission { [weak self] granted in
                 if granted { self?.startRecording(trigger: trigger) }
-                else { self?.recordingState = .failed("Microphone access denied.") }
+                else {
+                    self?.recordingState = .failed("Microphone access denied.")
+                    self?.offerMicrophoneSettings()
+                }
             }
 
         default:
-            recordingState = .failed("Microphone access denied. Enable in System Settings → Privacy & Security → Microphone.")
+            recordingState = .failed("Microphone access denied.")
+            offerMicrophoneSettings()
         }
     }
+
+    /// Offers a route to fix a missing microphone, at the moment it actually
+    /// matters.
+    ///
+    /// The menu used to carry a permanent "Microphone Access Required" item. It
+    /// was removed because a row that is always there for a situation that is
+    /// almost never true is just clutter — you learn to ignore it, and it casts
+    /// doubt on a working app. The help belongs at the moment you press record
+    /// and nothing happens, which is the only time it is information rather than
+    /// noise.
+    private func offerMicrophoneSettings() {
+        // Never stack alerts: a second press while one is up would add another.
+        guard !isShowingMicrophoneAlert else { return }
+        isShowingMicrophoneAlert = true
+        defer { isShowingMicrophoneAlert = false }
+
+        NSApp.activate(ignoringOtherApps: true)
+
+        let alert = NSAlert()
+        alert.messageText = "DubScribe needs microphone access"
+        alert.informativeText = """
+            Without it, recordings are silent and nothing reaches your clipboard.
+
+            You can grant access in System Settings → Privacy & Security → Microphone.
+            """
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Not Now")
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            PermissionHelpers.openMicrophoneSettings()
+        }
+    }
+
 
     func stopRecording() {
         guard recordingState.isRecording else { return }

@@ -6,8 +6,8 @@ struct DubScribeApp: App {
 
     @StateObject private var coordinator = AppCoordinator()
 
-    /// Drives the one-time first-launch nudge. See FirstRunNudge.swift.
-    @NSApplicationDelegateAdaptor(FirstRunNudge.self) private var firstRunNudge
+    /// Owns the one-time welcome and per-version release notes.
+    @NSApplicationDelegateAdaptor(LaunchPresenter.self) private var launchPresenter
 
     var body: some Scene {
         MenuBarExtra {

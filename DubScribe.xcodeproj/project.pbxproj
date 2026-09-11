@@ -8,9 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		AA000001 /* DubScribeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100001 /* DubScribeApp.swift */; };
+		AA000060 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000061 /* WelcomeView.swift */; };
 		AA000042 /* WhatsNewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000043 /* WhatsNewView.swift */; };
 		AA000040 /* ReleaseNotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000041 /* ReleaseNotes.swift */; };
-		AA000030 /* FirstRunNudge.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000031 /* FirstRunNudge.swift */; };
+		AA000030 /* LaunchPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000031 /* LaunchPresenter.swift */; };
 		AA000002 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100002 /* AppCoordinator.swift */; };
 		AA000004 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100004 /* SettingsView.swift */; };
 		AA000005 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100005 /* MenuBarView.swift */; };
@@ -35,10 +36,11 @@
 
 /* Begin PBXFileReference section */
 		AA100001 /* DubScribeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DubScribeApp.swift; sourceTree = "<group>"; };
-		AA000031 /* FirstRunNudge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstRunNudge.swift; sourceTree = "<group>"; };
+		AA000031 /* LaunchPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchPresenter.swift; sourceTree = "<group>"; };
 		AA100002 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
 		AA100004 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		AA100005 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
+		AA000061 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		AA000043 /* WhatsNewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewView.swift; sourceTree = "<group>"; };
 		AA000041 /* ReleaseNotes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseNotes.swift; sourceTree = "<group>"; };
 		AA100006 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
@@ -101,7 +103,7 @@
 			isa = PBXGroup;
 			children = (
 				AA100001 /* DubScribeApp.swift */,
-				AA000031 /* FirstRunNudge.swift */,
+				AA000031 /* LaunchPresenter.swift */,
 				AA100002 /* AppCoordinator.swift */,
 			);
 			path = App;
@@ -112,6 +114,7 @@
 			children = (
 				AA100004 /* SettingsView.swift */,
 				AA100005 /* MenuBarView.swift */,
+				AA000061 /* WelcomeView.swift */,
 				AA000043 /* WhatsNewView.swift */,
 				AA000041 /* ReleaseNotes.swift */,
 				AA100023 /* RecordingHUD.swift */,
@@ -264,10 +267,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA000001 /* DubScribeApp.swift in Sources */,
-				AA000030 /* FirstRunNudge.swift in Sources */,
+				AA000030 /* LaunchPresenter.swift in Sources */,
 				AA000002 /* AppCoordinator.swift in Sources */,
 				AA000004 /* SettingsView.swift in Sources */,
 				AA000005 /* MenuBarView.swift in Sources */,
+				AA000060 /* WelcomeView.swift in Sources */,
 				AA000042 /* WhatsNewView.swift in Sources */,
 				AA000040 /* ReleaseNotes.swift in Sources */,
 				AA000006 /* AudioRecorder.swift in Sources */,

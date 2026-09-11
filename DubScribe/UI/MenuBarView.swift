@@ -58,8 +58,6 @@ struct MenuBarView: View {
 
             Divider()
 
-            permissionItemIfNeeded
-
             Button {
                 NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: "settings")
@@ -190,23 +188,6 @@ struct MenuBarView: View {
             // Deletion state changes should take effect at once rather than at
             // the next sweep interval.
             if title == "Delete Clips Automatically" { coordinator.clipStore.sweep() }
-        }
-    }
-
-    // MARK: - Permissions
-
-    /// Permission repair, moved out of the main window. A revoked microphone is
-    /// the one failure that stops DubScribe working entirely, so it is the one
-    /// thing worth interrupting the menu with — and it is surfaced only when it
-    /// is actually broken.
-    @ViewBuilder
-    private var permissionItemIfNeeded: some View {
-        if !PermissionHelpers.isMicrophoneAuthorized {
-            Button {
-                PermissionHelpers.openMicrophoneSettings()
-            } label: {
-                Label("Microphone Access Required…", systemImage: "mic.slash")
-            }
         }
     }
 
