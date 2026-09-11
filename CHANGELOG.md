@@ -65,6 +65,12 @@
 
 ### Fixed
 
+- **Dock → Quit now works while Settings is open.** Settings was presented as a sheet,
+  and a sheet runs a modal session that makes macOS refuse to quit: the quit Apple Event
+  came back as `userCanceledErr (-128)` *before* `applicationShouldTerminate` was ever
+  called, so no app delegate could intercept it. Settings is now its own window, which
+  is also the standard macOS pattern for preferences.
+
 - **The level indicator no longer scrolls, so it can no longer stutter.** The capture tap
   is stuck at ~10 Hz: `AVAudioEngine` ignores `installTap(bufferSize:)`, measured
   delivering 4800-frame buffers at 10.7 Hz for *every* requested size up to 4096. The

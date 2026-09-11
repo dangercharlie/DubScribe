@@ -4,7 +4,6 @@ import AppKit
 
 struct SettingsView: View {
     @EnvironmentObject var coordinator: AppCoordinator
-    @Environment(\.dismiss) private var dismiss
 
     @State private var isRecordingHold = false
     @State private var isRecordingPush = false
@@ -63,14 +62,15 @@ struct SettingsView: View {
                 .foregroundStyle(Color.accentColor)
                 .accessibilityHidden(true)
 
-            Text("Settings")
-                .font(.system(size: 15, weight: .semibold))
-
+            // No in-view title: the window's own title bar carries it now, and
+            // a second "Settings" directly beneath it just reads as a duplicate.
             Spacer()
 
             Button {
                 coordinator.applySettings()
-                dismiss()
+                // A window, not a sheet, so close it rather than dismissing a
+                // presentation. Escape still works via the keyboard shortcut.
+                NSApp.keyWindow?.close()
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 18))

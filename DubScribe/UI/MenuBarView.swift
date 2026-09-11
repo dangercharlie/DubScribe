@@ -65,8 +65,7 @@ struct MenuBarView: View {
 
             Button("Settings…") {
                 NSApp.activate(ignoringOtherApps: true)
-                openWindow(id: "main")
-                coordinator.isSettingsOpen = true
+                openWindow(id: "settings")
             }
 
             Divider()

@@ -3,6 +3,7 @@ import AVFoundation
 
 struct ContentView: View {
     @EnvironmentObject var coordinator: AppCoordinator
+    @Environment(\.openWindow) private var openWindow
     @State private var permissionsExpanded: Bool = false
     @State private var pulseAnimation = false
     @State private var micGranted = PermissionHelpers.isMicrophoneAuthorized
@@ -56,9 +57,6 @@ struct ContentView: View {
             micGranted = PermissionHelpers.isMicrophoneAuthorized
             permissionsExpanded = !micGranted
         }
-        .sheet(isPresented: $coordinator.isSettingsOpen) {
-            SettingsView().environmentObject(coordinator)
-        }
     }
 
     // MARK: - Ticker
@@ -108,7 +106,7 @@ struct ContentView: View {
             Spacer()
 
             Button {
-                coordinator.isSettingsOpen = true
+                openWindow(id: "settings")
             } label: {
                 Image(systemName: "gearshape")
                     .font(.system(size: 15))

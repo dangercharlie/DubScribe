@@ -11,7 +11,6 @@ final class AppCoordinator: ObservableObject {
     @Published var settings: AppSettings
     @Published var lastClipURL: URL?
     @Published var lastDuration: TimeInterval = 0
-    @Published var isSettingsOpen = false
 
     /// Transient, user-facing message shown in the status area and then cleared.
     @Published var notice: String?
