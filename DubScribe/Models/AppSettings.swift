@@ -23,11 +23,10 @@ struct AppSettings: Codable {
     var micTestThreshold: Float
 
     // Housekeeping
-    /// When true, clips move to the Trash once they are no longer pasteable.
+    /// When true, the clips folder is kept within its size budget.
     var autoDeleteClips: Bool
-    /// How long a displaced clip lingers before being trashed, in minutes.
-    var clipRetentionMinutes: Double
-    /// Backstop cap on total clips-folder size, in megabytes.
+    /// Cap on total clips-folder size, in megabytes. This is the only deletion
+    /// rule: oldest clips go first once the folder passes it.
     var maxClipsSizeMB: Double
 
     // Visual feedback
@@ -66,7 +65,6 @@ struct AppSettings: Codable {
         case mediaResumeDelay
         case micTestThreshold
         case autoDeleteClips
-        case clipRetentionMinutes
         case maxClipsSizeMB
         case launchAtLogin
         case hotkey
@@ -87,7 +85,6 @@ struct AppSettings: Codable {
         mediaResumeDelay: 0.0,
         micTestThreshold: 0.02,
         autoDeleteClips: true,
-        clipRetentionMinutes: 2.0,
         maxClipsSizeMB: 250.0,
         showRecordingHUD: true,
         hudOpacity: 1.0,
@@ -107,7 +104,6 @@ struct AppSettings: Codable {
         mediaResumeDelay: Double,
         micTestThreshold: Float,
         autoDeleteClips: Bool,
-        clipRetentionMinutes: Double,
         maxClipsSizeMB: Double,
         showRecordingHUD: Bool,
         hudOpacity: Double,
@@ -124,7 +120,6 @@ struct AppSettings: Codable {
         self.mediaResumeDelay = mediaResumeDelay
         self.micTestThreshold = micTestThreshold
         self.autoDeleteClips = autoDeleteClips
-        self.clipRetentionMinutes = clipRetentionMinutes
         self.maxClipsSizeMB = maxClipsSizeMB
         self.showRecordingHUD = showRecordingHUD
         self.hudOpacity = hudOpacity
@@ -170,7 +165,6 @@ struct AppSettings: Codable {
         }
 
         autoDeleteClips = try c.decodeIfPresent(Bool.self, forKey: .autoDeleteClips) ?? fallback.autoDeleteClips
-        clipRetentionMinutes = try c.decodeIfPresent(Double.self, forKey: .clipRetentionMinutes) ?? fallback.clipRetentionMinutes
         maxClipsSizeMB = try c.decodeIfPresent(Double.self, forKey: .maxClipsSizeMB) ?? fallback.maxClipsSizeMB
         launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? fallback.launchAtLogin
         hotkey = try c.decodeIfPresent(Hotkey.self, forKey: .hotkey)
@@ -200,7 +194,6 @@ struct AppSettings: Codable {
         try c.encode(mediaResumeDelay, forKey: .mediaResumeDelay)
         try c.encode(micTestThreshold, forKey: .micTestThreshold)
         try c.encode(autoDeleteClips, forKey: .autoDeleteClips)
-        try c.encode(clipRetentionMinutes, forKey: .clipRetentionMinutes)
         try c.encode(maxClipsSizeMB, forKey: .maxClipsSizeMB)
         try c.encode(launchAtLogin, forKey: .launchAtLogin)
         try c.encodeIfPresent(hotkey, forKey: .hotkey)

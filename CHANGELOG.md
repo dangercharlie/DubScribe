@@ -15,15 +15,17 @@
   already in progress the real indicator is on screen, so no preview appears and the
   live one simply restyles.
 
-- **Self-deleting clips.** A recording now moves itself to the Trash once it is no
-  longer pasteable, instead of accumulating in the clips folder forever. A clip sitting
-  on the clipboard is never deleted. Retention time (default 2 minutes) and a folder
-  size limit (default 250 MB) are configurable in Settings, and the behaviour can be
-  turned off entirely.
+- **Self-deleting clips.** A recording now moves itself to the Trash instead of
+  accumulating in the clips folder forever. A clip sitting on the clipboard is never
+  deleted, however long it stays there. The folder is kept within a size limit
+  (default 250 MB), oldest clips first, and the behaviour can be turned off entirely.
+  There is deliberately no time-based expiry: an earlier design trashed a displaced
+  clip two minutes after it left the clipboard, which broke the one promise a
+  clipboard tool must keep.
 - **Copy Last Clip Again**, in the dashboard and the menu bar — re-copies the most
   recent clip without recording it again.
-- **Clip storage panel** in Settings, showing the clips folder, current clip count and
-  total size on disk.
+- **Clip storage panel** in Settings, showing the clips folder and its size limit,
+  with a Show in Finder button.
 - Dashboard empty state, app mark, and clip glyph as vector assets, with a defined
   accent colour.
 - **A level indicator while recording.** A small floating panel at the top of the

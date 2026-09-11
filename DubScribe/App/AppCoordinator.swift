@@ -348,11 +348,9 @@ final class AppCoordinator: ObservableObject {
         }
 
         // Guard against nonsense values from a hand-edited or corrupt blob.
-        let retention = max(15, settings.clipRetentionMinutes * 60)
         let capBytes = Int64(max(10, settings.maxClipsSizeMB) * 1024 * 1024)
         clipStore.policy = ClipPolicy(
             autoDelete: settings.autoDeleteClips,
-            retention: retention,
             maxTotalBytes: capBytes
         )
 

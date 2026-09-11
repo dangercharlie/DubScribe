@@ -4,17 +4,16 @@ import Combine
 
 /// Retention policy for recorded clips.
 struct ClipPolicy {
-    /// Master switch. When false, clips are kept indefinitely (the pre-0.7.0
-    /// behaviour) and neither rule below runs.
+    /// Master switch. When false, clips are kept indefinitely and the size cap
+    /// does not run.
     var autoDelete: Bool
-    /// How long a displaced clip lingers before being trashed, in seconds.
-    var retention: TimeInterval
-    /// Backstop cap on the total size of the clips folder.
+    /// Cap on the total size of the clips folder. This is the only rule now:
+    /// oldest clips are trashed once the folder passes it, and nothing is
+    /// deleted on a timer.
     var maxTotalBytes: Int64
 
     static let `default` = ClipPolicy(
         autoDelete: true,
-        retention: 120,
         maxTotalBytes: 250 * 1024 * 1024
     )
 }
@@ -58,9 +57,6 @@ final class ClipStore: ObservableObject {
     /// The clip the audio player has loaded.
     private var playerClip: URL?
 
-    /// When each clip stopped being pasteable. The retention clock, keyed by
-    /// `identity(_:)` rather than by the raw URL — see that method.
-    private var displacedAt: [URL: Date] = [:]
 
     /// Canonical identity for a clip.
     ///
@@ -70,12 +66,13 @@ final class ClipStore: ObservableObject {
     /// a symlinked path component (`/tmp` vs `/private/tmp`), a symlinked home
     /// directory, or a `..` segment — and a mismatch silently breaks any
     /// dictionary keyed by the raw `URL`. The effect is nasty and quiet: the
-    /// retention clock is written under one key and read under another, so a
-    /// displaced clip is deleted immediately rather than after its grace
-    /// period. Key every identity map and comparison through here.
+    /// comparison keyed by the raw `URL`. That failure is quiet and destructive:
+    /// a clip still on the pasteboard would not be recognised as protected, and
+    /// the size cap would delete the very file the user is about to paste. Key
+    /// every identity comparison through here.
     ///
     /// Verified failing before this change: with the clips directory reached via
-    /// the `/tmp` symlink, a displaced clip was trashed on the very first sweep.
+    /// the `/tmp` symlink, a protected clip was trashed on the very first sweep.
     private static func identity(_ url: URL) -> URL {
         FileManagerHelpers.canonical(url)
     }
@@ -87,33 +84,10 @@ final class ClipStore: ObservableObject {
     /// The instant the self-delete policy began (first launch of a version that
     /// has it).
     ///
-    /// Clips recorded before this existed were captured by a version that never
-    /// deleted anything and implicitly promised to keep them. Reclaiming them the
-    /// moment someone upgrades would erase months of recordings they never agreed
-    /// to lose, so pre-policy clips are exempt from the retention timer entirely.
-    /// Only the size cap may touch them, and only when the folder genuinely
-    /// exceeds it.
-    private let policyStart: Date
-    private static let policyStartKey = "clipPolicyStartDate"
-
     init() {
         lastChangeCount = ClipboardManager.changeCount
-
-        let defaults = UserDefaults.standard
-        if let stored = defaults.object(forKey: Self.policyStartKey) as? Date {
-            policyStart = stored
-        } else {
-            let now = Date()
-            defaults.set(now, forKey: Self.policyStartKey)
-            policyStart = now
-        }
     }
 
-    /// True for clips this app recorded under the current self-delete policy.
-    /// Pre-0.7.0 clips are the user's own accumulation and are left alone.
-    private func isSelfDeleting(_ url: URL) -> Bool {
-        (creationDate(url) ?? .distantPast) >= policyStart
-    }
 
     // MARK: - Lifecycle
 
@@ -136,7 +110,6 @@ final class ClipStore: ObservableObject {
     /// A clip has just been placed on the clipboard by us.
     func noteCopied(_ url: URL) {
         clipboardClip = url
-        displacedAt[Self.identity(url)] = nil
         lastChangeCount = ClipboardManager.changeCount
         refreshStats()
         enforceSizeCap()
@@ -149,21 +122,17 @@ final class ClipStore: ObservableObject {
 
     /// Called once at startup, after legacy migration.
     ///
-    /// Seeds retention clocks from file creation dates so clips left over from
-    /// a previous session are reclaimed. If the pasteboard still holds one of
-    /// our clips — `writeObjects` writes eagerly, so it survives a quit — that
-    /// one is re-protected rather than deleted.
+    /// Called once at startup, after legacy migration.
+    ///
+    /// Re-protects the clip the pasteboard is still holding — `writeObjects`
+    /// writes eagerly, so a clip survives a quit while remaining pasteable —
+    /// then sweeps against the size cap.
     func reconcileOnLaunch() {
         lastChangeCount = ClipboardManager.changeCount
 
         if let live = ClipboardManager.clipboardClipURL(),
            FileManagerHelpers.isOwnedClip(live) {
             clipboardClip = live
-        }
-
-        let now = Date()
-        for url in clipFiles() where !isProtected(url) && isSelfDeleting(url) {
-            displacedAt[Self.identity(url)] = creationDate(url) ?? now
         }
 
         sweep()
@@ -179,27 +148,17 @@ final class ClipStore: ObservableObject {
         refreshClipboardState()
 
         if policy.autoDelete {
-            let now = Date()
-            // Oldest first, so an over-cap folder reclaims the least useful
-            // clips when several become eligible at once.
-            for url in clipFiles().sorted(by: oldestFirst) {
-                guard !isProtected(url) else { continue }
-                // Never let the retention timer reclaim a clip the user recorded
-                // before self-delete existed.
-                guard isSelfDeleting(url) else { continue }
-                let since = displacedAt[Self.identity(url)] ?? creationDate(url) ?? now
-                if now.timeIntervalSince(since) >= policy.retention {
-                    trash(url)
-                }
-            }
             enforceSizeCap()
         }
 
         refreshStats()
     }
 
-    /// Detect that our clip is no longer the file URL on the pasteboard and
-    /// start its retention clock.
+    /// Keep track of whether our clip is still the file URL on the pasteboard.
+    ///
+    /// This is now purely a protection signal: a clip still sitting on the
+    /// clipboard is never deleted by the size cap, because deleting it would
+    /// break the one thing the user is about to paste.
     private func refreshClipboardState() {
         let count = ClipboardManager.changeCount
         guard count != lastChangeCount else { return }
@@ -209,15 +168,12 @@ final class ClipStore: ObservableObject {
 
         if let current = clipboardClip,
            live.map(Self.identity) != Self.identity(current) {
-            displacedAt[Self.identity(current)] = Date()
             clipboardClip = nil
         }
 
-        // Another app (or the user) put one of our clips back on the
-        // pasteboard — protect it again and clear its clock.
+        // Another app (or the user) put one of our clips back on the pasteboard.
         if let live, FileManagerHelpers.isOwnedClip(live) {
             clipboardClip = live
-            displacedAt[Self.identity(live)] = nil
         }
     }
 
@@ -263,7 +219,6 @@ final class ClipStore: ObservableObject {
 
         do {
             try FileManager.default.trashItem(at: url, resultingItemURL: nil)
-            displacedAt[Self.identity(url)] = nil
             print("[DubScribe.ClipStore] Moved to Trash: \(url.lastPathComponent)")
             onClipsChanged?()
         } catch {

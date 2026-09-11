@@ -23,7 +23,7 @@
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 	<key>LSUIElement</key>
-	<false/>
+	<true/>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>DubScribe uses Apple Events to pause and resume media playback in Music and Spotify during recordings.</string>
 	<key>NSHumanReadableCopyright</key>

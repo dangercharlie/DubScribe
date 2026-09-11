@@ -14,9 +14,9 @@ Hold a key, say the thing, release. The clip lands on your clipboard as a WAV,
 ready to paste — no editor, no library, no save dialog, no file hunting.
 
 <p align="center">
-  <img src="screenshots/main_window.png" width="350" alt="DubScribe main window: the record button, the last clip with playback controls, and a note that clips move to the Trash after leaving the clipboard." />
+  <img src="screenshots/menu_bar.png" width="300" alt="The DubScribe menu: recording status, Start Recording, and quick access to the last clip, Settings and the clips folder." />
   &nbsp;&nbsp;&nbsp;
-  <img src="screenshots/settings_window.png" width="350" alt="DubScribe settings: recording shortcuts, audio input, the level indicator, media handling, and clip storage." />
+  <img src="screenshots/settings_window.png" width="350" alt="DubScribe settings, on the Recording tab: shortcuts, microphone and sounds, with an Advanced section holding media handling and the level indicator." />
 </p>
 
 ---
@@ -44,6 +44,10 @@ xattr -dr com.apple.quarantine /Applications/DubScribe.app
 3. Record — press once, or hold and release.
 4. `⌘V` wherever the clip belongs.
 
+DubScribe lives entirely in the menu bar: there is no main window and no Dock icon.
+The menu holds everything — start and stop, the last clip, playback, Settings, and the
+clips folder.
+
 ## Features
 
 - **Two ways to record.** Hold a key, or press once to start and again to stop.
@@ -63,11 +67,11 @@ required**.
 ## Clips clean up after themselves
 
 DubScribe is for getting audio onto your clipboard, not for building a library, so
-clips are temporary by default. A finished clip is never deleted while it is on the
-clipboard. Once the clipboard moves on, a timer starts — two minutes by default —
-and the clip is moved to the Trash, where *Put Back* still works. A 250 MB folder
-cap catches clips that never leave the clipboard. Both are configurable, and the
-whole behaviour can be turned off.
+clips are temporary by default. **A finished clip is never deleted while it is on the
+clipboard** — however long it stays there. The folder is kept within a size budget
+(250 MB by default), oldest clips first, and anything removed goes to the Trash where
+*Put Back* still works. There is no timer: a clip is only ever removed when the folder
+needs the room. The budget is configurable, and the whole behaviour can be turned off.
 
 ## Privacy
 
