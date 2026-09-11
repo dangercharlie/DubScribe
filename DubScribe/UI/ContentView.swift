@@ -363,6 +363,8 @@ struct ContentView: View {
         HStack(alignment: .top, spacing: 7) {
             Image(systemName: coordinator.settings.autoDeleteClips ? "clock.arrow.circlepath" : "tray.full")
                 .font(.system(size: 11))
+                // Decorative: the adjacent text already says this.
+                .accessibilityHidden(true)
             Text(retentionDescription)
                 .font(.system(size: 11))
                 .fixedSize(horizontal: false, vertical: true)

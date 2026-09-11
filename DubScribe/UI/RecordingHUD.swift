@@ -64,6 +64,20 @@ final class RecordingHUDModel: ObservableObject {
 final class RecordingHUDWindow: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
+
+    // The indicator exists purely to be looked at, so it must stay out of the
+    // accessibility hierarchy completely.
+    //
+    // `setAccessibilityHidden` on a window is ignored — measured: the panel kept
+    // surfacing as an empty `AXSystemDialog` after both the hosting view and the
+    // window were hidden. Overriding these two is what actually removes the
+    // window element from the tree that VoiceOver walks.
+    //
+    // Hiding the SwiftUI content as well is still worthwhile: it is what stops
+    // the destination app name and the elapsed timer being announced even if a
+    // future macOS publishes the window again.
+    override func isAccessibilityElement() -> Bool { false }
+    override func accessibilityChildren() -> [Any]? { [] }
 }
 
 /// A floating level indicator shown while a clip is being captured.
@@ -224,12 +238,18 @@ final class RecordingHUDController {
         // It is a decorative animation, so VoiceOver should skip it entirely
         // rather than announce a meaningless graphic.
         //
-        // Both calls are needed: `NSHostingView` overrides
-        // `isAccessibilityElement`, so setting that alone was verified to still
-        // report `true`. Hiding the subtree is what actually keeps VoiceOver off
-        // it — the menu-bar item carries the accessible state instead.
+        // `NSHostingView` overrides `isAccessibilityElement`, so setting that
+        // alone was verified to still report `true` — both calls are needed.
+        //
+        // Measured by dumping this app's own AX tree: hiding the hosting view
+        // was NOT sufficient. The panel still surfaced as an `AXSystemDialog`
+        // exposing "Clipboard" and "0:00", so VoiceOver could land on a stray
+        // dialog mid-recording. The window is hidden as well, and the SwiftUI
+        // root carries `.accessibilityHidden(true)`. The menu-bar item stays the
+        // element that reports state.
         hosting.setAccessibilityElement(false)
         hosting.setAccessibilityHidden(true)
+        panel.setAccessibilityHidden(true)
         return panel
     }
 
@@ -277,6 +297,10 @@ struct RecordingHUDView: View {
             .frame(width: RecordingHUDMetrics.size.width,
                    height: RecordingHUDMetrics.size.height,
                    alignment: .top)
+            // See the note on `makePanel`: an NSWindow is still published to AX
+            // even when its hosting view is hidden, so the content is hidden at
+            // the SwiftUI level too and the window is left with nothing to say.
+            .accessibilityHidden(true)
     }
 
     /// The frosted backdrop.

@@ -125,6 +125,20 @@
 - System volume is only restored after a muted recording if you have not changed the
   volume yourself in the meantime.
 
+- **VoiceOver now announces what each setting actually does.** The switches in
+  Settings carried no accessible label of their own — their visible titles were
+  published as separate text elements — so VoiceOver read them as "switch, on"
+  with no indication of what was being switched. All seven are labelled now, the
+  opacity slider is labelled like its neighbours already were, and two decorative
+  icons that were announcing raw SF Symbol names (literally
+  "clock.arrow.circlepath") are hidden from assistive tech.
+- **The recording indicator is now genuinely invisible to VoiceOver.** It was
+  hidden on its hosting view, which was not enough: the panel still surfaced as
+  an `AXSystemDialog` exposing the destination app name and the elapsed timer, so
+  VoiceOver could land on a stray dialog mid-recording. The window now overrides
+  its own accessibility, and the content is hidden as well. Verified by dumping
+  the app's own accessibility tree: the indicator no longer appears in it at all.
+
 ### Removed
 
 - **Voice activation.** It could start recording from ambient noise, was the buggiest

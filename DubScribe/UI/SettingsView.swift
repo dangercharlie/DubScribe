@@ -187,6 +187,7 @@ struct SettingsView: View {
                     }
                 }
                 .toggleStyle(.switch)
+.accessibilityLabel("Show level indicator while recording")
                 .onChange(of: coordinator.settings.showRecordingHUD) { _ in coordinator.applySettings() }
 
                 if coordinator.settings.showRecordingHUD {
@@ -200,6 +201,7 @@ struct SettingsView: View {
                             if !editing { coordinator.applySettings() }
                         }
                         .frame(maxWidth: 150)
+                        .accessibilityLabel("Opacity")
                         Text("\(Int(coordinator.settings.hudOpacity * 100))%")
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundStyle(.tertiary)
@@ -221,6 +223,7 @@ struct SettingsView: View {
                     }
                 }
                 .toggleStyle(.switch)
+.accessibilityLabel("Play a sound when recording stops")
                 .onChange(of: coordinator.settings.playSounds) { _ in coordinator.applySettings() }
 
                 Toggle(isOn: $coordinator.settings.playStartCue) {
@@ -233,6 +236,7 @@ struct SettingsView: View {
                     }
                 }
                 .toggleStyle(.switch)
+.accessibilityLabel("Play a sound when recording starts")
                 .onChange(of: coordinator.settings.playStartCue) { _ in coordinator.applySettings() }
             }
         }
@@ -252,6 +256,7 @@ struct SettingsView: View {
                     }
                 }
                 .toggleStyle(.switch)
+.accessibilityLabel("Mute system audio while recording")
                 .onChange(of: coordinator.settings.muteSystemAudioDuringRecording) { _ in
                     coordinator.applySettings()
                 }
@@ -267,6 +272,7 @@ struct SettingsView: View {
                     }
                 }
                 .toggleStyle(.switch)
+.accessibilityLabel("Pause media playback while recording")
                 .onChange(of: coordinator.settings.pauseMediaDuringRecording) { _ in
                     coordinator.applySettings()
                 }
@@ -312,6 +318,7 @@ struct SettingsView: View {
                     }
                 }
                 .toggleStyle(.switch)
+.accessibilityLabel("Automatically delete clips")
                 .onChange(of: coordinator.settings.autoDeleteClips) { _ in
                     coordinator.applySettings()
                     coordinator.clipStore.sweep()
@@ -420,6 +427,7 @@ struct SettingsView: View {
                 }
             }
             .toggleStyle(.switch)
+.accessibilityLabel("Launch at login")
         }
     }
 
@@ -480,6 +488,7 @@ struct SettingsView: View {
                 Image(nsImage: NSApp.applicationIconImage)
                     .resizable()
                     .frame(width: 44, height: 44)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("DubScribe")
