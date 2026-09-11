@@ -46,7 +46,9 @@ xattr -dr com.apple.quarantine /Applications/DubScribe.app
 
 DubScribe lives entirely in the menu bar: there is no main window and no Dock icon.
 The menu holds everything — start and stop, the last clip, playback, Settings, and the
-clips folder.
+clips folder. The settings you change while working (microphone, level indicator, pause
+media, mute system audio, delete clips automatically) are nested right there, so a
+quick change never means opening a window.
 
 ## Features
 

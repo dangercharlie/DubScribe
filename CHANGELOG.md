@@ -47,6 +47,17 @@
 
 ### Changed
 
+- **DubScribe lives in the menu bar.** The main window is gone — the app now runs
+  without a Dock icon or an application menu, and everything it does is reachable
+  from its menu-bar icon. The settings you reach for while working (microphone,
+  level indicator, pause media, mute system audio, delete clips automatically) are
+  nested directly in that menu, so a mid-task change no longer means opening a
+  window. Audio playback and Reveal moved there too, and the first time you launch
+  the menu opens itself once so the app introduces itself where it actually lives.
+  Settings is unchanged as a place to configure things properly.
+- **A "What's New" window** appears once after an update, summarising what changed
+  in the version you have just started using. It never appears on a first install,
+  where it would tell you nothing you could act on.
 - **The indicator is no longer hidden from screen capture.** It previously set
   `sharingType = .none`, which excludes a window from *every* capture client — including
   your own `⌘⇧4` screenshots, so the indicator could never be shown, demoed, or reported
