@@ -10,8 +10,10 @@
   it does not scroll, so what is being judged is the appearance and nothing else,
   and it costs about half the CPU of the live trace (measured 6.8% against 13.3%
   of one core, on identical builds — while drawing a full waveform to the live
-  version's flat line). If a recording is already in progress the real indicator is
-  on screen, so no preview appears and the live one simply restyles.
+  version's flat line). The opacity is applied on every change rather than only on
+  release, so the preview's frost follows the slider as it moves. If a recording is
+  already in progress the real indicator is on screen, so no preview appears and the
+  live one simply restyles.
 
 - **Self-deleting clips.** A recording now moves itself to the Trash once it is no
   longer pasteable, instead of accumulating in the clips folder forever. A clip sitting

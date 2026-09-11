@@ -380,6 +380,11 @@ final class AppCoordinator: ObservableObject {
     /// slider is dragged would be both wasteful and disruptive.
     func updateHUDAppearance() {
         recordingHUD.setBackdropOpacity(settings.hudOpacity)
+        // The preview is a separate indicator, so it has to be told as well.
+        // Without this it keeps whatever opacity it was last shown with, and the
+        // slider appears to do nothing while the preview is up — which is exactly
+        // when the user is watching it.
+        settingsPreviewHUD.setBackdropOpacity(settings.hudOpacity)
         if !settings.showRecordingHUD { recordingHUD.hide() }
     }
 
@@ -392,6 +397,9 @@ final class AppCoordinator: ObservableObject {
     /// last thing they did was let go, and they need to see the result of it.
     func previewHUDAppearance() {
         guard settings.showRecordingHUD else { return }
+        // Set the opacity before showing, so the first frame is already the value
+        // being dragged to rather than the controller's default.
+        settingsPreviewHUD.setBackdropOpacity(settings.hudOpacity)
         settingsPreviewHUD.showPreview()
 
         previewDismissTask?.cancel()
