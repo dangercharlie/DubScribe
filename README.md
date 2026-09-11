@@ -6,241 +6,107 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/dangercharlie/DubScribe?style=flat" alt="License" /></a>
 </p>
 
-**DubScribe** is a lightweight macOS utility for low-friction audio capture.
-
-The core workflow is simple:
+**DubScribe** is a small macOS utility for low-friction audio capture.
 
 > Shortcut → record → paste
 
-It is designed for moments when you want to capture a short audio clip without opening a full audio editor, managing a voice memo library, exporting a file manually, or transcribing your voice into text.
-
-DubScribe captures the original audio as a pasteable WAV file.
+Hold a key, say the thing, release. The clip lands on your clipboard as a WAV,
+ready to paste — no editor, no library, no save dialog, no file hunting.
 
 <p align="center">
-  <img src="screenshots/main_window.png" width="350" alt="DubScribe main window showing a green success checkmark, 'Copied to clipboard' message, and playback controls for the last recorded audio clip." />
+  <img src="screenshots/main_window.png" width="350" alt="DubScribe main window: the record button, the last clip with playback controls, and a note that clips move to the Trash after leaving the clipboard." />
   &nbsp;&nbsp;&nbsp;
-  <img src="screenshots/settings_window.png" width="350" alt="DubScribe settings window showing recording shortcuts, audio input, mute system audio, pause media playback, and a resume delay slider from instant to one second." />
-</p>
-
-<p align="center">
-  <em>Settings include recording shortcuts, audio input selection, optional mute system audio, pause media playback, and a resume crossover delay slider from 0.0s to 1.0s.</em>
+  <img src="screenshots/settings_window.png" width="350" alt="DubScribe settings: recording shortcuts, audio input, the level indicator, media handling, and clip storage." />
 </p>
 
 ---
 
-## Why?
+## Install
 
-macOS has plenty of ways to record audio, but most involve opening another app, saving or exporting a file, finding it, then attaching or dragging it somewhere.
-
-DubScribe solves a narrower problem:
-
-> I want to capture a short audio clip and paste it immediately.
-
-It is designed for low-clutter workflows where reducing small steps matters — especially if file hunting, extra windows, save dialogs, or context switching create friction.
-
-Think of it like a screenshot tool, but for quick WAV audio snippets.
-
----
-
-## Low-Clutter Workflow
-
-DubScribe is built around reducing small workflow costs.
-
-The intended loop is:
-
-> configure once → use a shortcut → paste the result
-
-This may be useful for people who prefer predictable, low-interruption workflows, including users who experience ADHD-related task switching, cognitive overload, or file-management clutter.
-
-DubScribe is not trying to replace platform accessibility tools. It is a focused utility for quickly creating a pasteable audio file with minimal context switching.
-
----
-
-## Features
-
-- Native macOS app built with SwiftUI
-- Apple Silicon focused
-- Records short WAV audio clips
-- Automatically copies finished recordings to the clipboard
-- Global hotkey recording
-- Push-to-record and hold-to-record workflows
-- Menu bar utility design
-- Last recording preview/playback, plus one-click **Copy Again**
-- Input source selection
-- Mic test / input feedback
-- Optional media pause/resume while recording
-- **Self-deleting clips** — each clip moves to the Trash once it is no longer pasteable
-- Launch at login
-- Local-only: no cloud, telemetry, AI, or transcription
-
----
-
-## Installation
-
-1. Download the latest `.dmg` from the [Releases](https://github.com/dangercharlie/DubScribe/releases) page.
-2. Open the `.dmg` and drag **DubScribe** to your `Applications` folder.
-3. Launch DubScribe. *(Note: Since this is an unsigned indie app, you may need to Right-Click -> Open the first time, or allow it in System Settings -> Privacy & Security).*
-
-### Homebrew Install
-
-You can also install DubScribe with Homebrew:
+Download the latest `.dmg` from [Releases](https://github.com/dangercharlie/DubScribe/releases)
+and drag **DubScribe** to your Applications folder. Or:
 
 ```bash
 brew install --cask dangercharlie/tap/dubscribe
 ```
 
-If macOS still flags the unsigned app after install, you can remove quarantine from only DubScribe:
+DubScribe is unsigned, so macOS may need a nudge the first time — right-click the
+app and choose **Open**, or clear the quarantine flag:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/DubScribe.app
 ```
 
----
+## Use
 
-## What's Changed
+1. Launch DubScribe and grant microphone access.
+2. Set your shortcuts in Settings. The defaults are `⌃⌥Space` to hold and `⌃⌥R` to toggle.
+3. Record — press once, or hold and release.
+4. `⌘V` wherever the clip belongs.
 
-See [CHANGELOG.md](CHANGELOG.md) for release notes.
+## Features
 
----
+- **Two ways to record.** Hold a key, or press once to start and again to stop.
+- **Straight to the clipboard.** Finished clips are copied automatically as WAV.
+- **A level indicator while recording** — the app the clip will paste into, a live
+  waveform, and elapsed time. It never takes focus, appears over full-screen apps,
+  and can be switched off.
+- **Copy Again.** Re-copy the last clip without recording it a second time.
+- **Input selection and a microphone test**, with a live level guide.
+- **Optional media handling.** Pause Spotify, Music or browser audio and mute
+  system output for the length of a recording, then put it all back.
+- **Clips clean up after themselves** — see below.
 
-## Basic Usage
+Shortcuts use Carbon (`RegisterEventHotKey`), so **no Accessibility permission is
+required**.
 
-1. Launch **DubScribe**.
-2. Grant microphone permission when prompted.
-3. Set your preferred recording hotkeys in Settings.
-4. Press your recording hotkey.
-5. Speak for a few seconds.
-6. Stop or release the hotkey.
-7. DubScribe saves the clip as a WAV and copies it to the clipboard.
-8. Press `Cmd + V` in a compatible app or folder to paste the WAV file.
+## Clips clean up after themselves
 
----
+DubScribe is for getting audio onto your clipboard, not for building a library, so
+clips are temporary by default. A finished clip is never deleted while it is on the
+clipboard. Once the clipboard moves on, a timer starts — two minutes by default —
+and the clip is moved to the Trash, where *Put Back* still works. A 250 MB folder
+cap catches clips that never leave the clipboard. Both are configurable, and the
+whole behaviour can be turned off.
 
-## Recording Modes
+## Privacy
 
-DubScribe supports multiple quick recording styles:
-
-### Hold to Record
-
-Hold the configured shortcut to record.  
-Release the shortcut to stop recording and copy the WAV to the clipboard.
-
-### Push to Record
-
-Press the configured shortcut once to start recording.  
-Press it again to stop recording and copy the WAV to the clipboard.
-
----
-
-## Clip Lifecycle
-
-DubScribe is built to get audio *onto your clipboard*, not to build a media library.
-Clips are therefore temporary by default.
-
-After a recording finishes, the WAV is copied to the clipboard and stays on disk for
-as long as it is useful:
-
-- It is **never deleted while it is on the clipboard**, however old it is.
-- Once the clipboard moves on, a **retention timer** starts (2 minutes by default).
-- When the timer expires, the clip — and only that clip — is **moved to the Trash**,
-  so it stays recoverable and *Put Back* keeps working.
-- A **folder size limit** (250 MB by default) acts as a backstop for clips that are
-  never displaced from the clipboard.
-
-Both the retention time and the size limit are configurable in Settings, and the whole
-behaviour can be switched off if you would rather keep every clip.
-
-Test clips recorded from the Microphone Test panel are written to the system temp
-folder, are never copied to the clipboard, and are cleaned up when the panel closes.
-
----
-
-## How It Compares
-
-DubScribe is intentionally small and specific.
-
-- Voice Memos is better for longer personal recordings, but not instant hotkey-to-clipboard capture.
-- QuickTime and traditional recorders can capture audio, but usually involve manual saving, exporting, and file hunting.
-- Dictation tools turn speech into text. DubScribe keeps the original audio as a pasteable WAV.
-- Larger capture tools may handle screenshots, video, and audio. DubScribe only focuses on quick microphone WAV capture.
-
----
-
-## Requirements
-
-- macOS
-- Apple Silicon Mac
-- Microphone access
-
----
-
-## Privacy & Security
-
-DubScribe is a local-only utility designed for transparency.
-
-- **Offline:** no cloud sync, APIs, or network services are used by the app.
-- **Local storage:** recordings are written to
-  `~/Library/Application Support/DubScribe/Clips/`. Clips recorded by versions before
-  0.7.0 lived in `~/Music/DubScribe/Clips/` and are moved across automatically on
-  first launch.
-- **Microphone is not held open:** the input device is active only while you are
-  actually recording or while the Microphone Test panel is monitoring. There is no
-  background listening and no standing microphone indicator.
-- **Hotkeys:** uses Carbon APIs (`RegisterEventHotKey`) for the shortcuts you configure.
-  No Accessibility permission is required.
-- **Deletion:** expired clips are moved to the Trash through the standard macOS API, so
-  they remain recoverable until you empty it.
-- **No telemetry:** no crash reporters, product analytics, or usage tracking.
-- **No keylogging:** DubScribe only responds to its configured recording shortcuts.
-
----
+- **Offline.** No network calls of any kind.
+- **The microphone is not held open.** It is live only while you are recording or
+  while the mic test panel is open — no background listening, no standing indicator.
+- **No telemetry, no crash reporting, no keylogging.**
+- Clips live in `~/Library/Application Support/DubScribe/Clips/` and are deleted
+  through the standard Trash API, so nothing disappears silently.
 
 ## Accessibility
 
-DubScribe aims to support simple keyboard and VoiceOver-friendly workflows.
+Native SwiftUI controls, labelled icon buttons, human-readable slider values, and
+decorative elements hidden from VoiceOver — including the recording indicator,
+which is skipped entirely. Feedback from VoiceOver, keyboard-only and
+neurodivergent users is very welcome.
 
-Current accessibility work includes:
+## Requirements
 
-- Native SwiftUI controls where possible
-- Descriptive labels for icon-only buttons
-- Human-readable slider values
-- Decorative visual elements hidden from VoiceOver
-- A workflow designed to avoid unnecessary windows, save dialogs, and file browsing
+macOS 13 or later, Apple Silicon, microphone access.
 
-Feedback from VoiceOver users, keyboard-only users, and neurodivergent users is very welcome.
+## About
 
----
+DubScribe is a vibe-coded experiment that turned into a tool I use every day. The
+product brief and iteration prompts were written with ChatGPT; the app was
+generated and refined with Claude, then reviewed and tested by hand against real
+use. It began from one line:
 
-## Development Notes
+> Make a simple macOS app where a hotkey records a short WAV clip and
+> automatically copies it to the clipboard.
 
-DubScribe was created as a small native macOS app experiment using Xcode and AI-assisted development.
-
-Initial product brief and iteration prompts were written with ChatGPT.  
-The working app was generated and refined in Antigravity using Claude Sonnet 4.6.
-
-This is a vibe-coded project in the plain sense: AI-assisted, human-reviewed, and tested through real use.
-
-The goal was to see whether a focused native utility could be built quickly from a clear product brief:
-
-> Make a simple macOS app where a hotkey records a short WAV clip and automatically copies it to the clipboard.
-
----
-
-## Status
-
-Early release.
-
-The core audio and hotkey systems are stable, but expect some rough edges around edge-case hardware or future macOS updates.
-
----
+It is an early release. The audio and hotkey paths are stable; expect rough edges
+around unusual hardware and future macOS updates. Release notes live in
+[CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-DubScribe is released under the MIT License.
-
----
+MIT.
 
 ## Support
 
-If you find DubScribe useful, consider buying me a coffee!  
-☕️ [Buy Me A Coffee](https://ko-fi.com/dangercharlie)
+☕️ [Buy Me a Coffee](https://ko-fi.com/dangercharlie)
