@@ -1,38 +1,99 @@
+import SwiftUI
 import AppKit
 import ApplicationServices
 
-/// Handles the one-time first-launch nudge.
+/// Handles the once-per-version "What's New" window and the first-launch nudge.
 ///
-/// A menu-bar-only app has a discoverability problem: on first run the user is
-/// handed a small icon and no indication that it is the entire interface. The
-/// app used to solve this by opening a main window, which is exactly the thing
-/// that was just removed.
+/// Both are one-time introductions to the same thing — the app telling you where
+/// it lives — so they share one delegate rather than fighting over
+/// `applicationDidFinishLaunching`.
 ///
-/// SwiftUI's `MenuBarExtra` has no public API to open itself, so the menu is
-/// opened the same way a click would open it: by pressing our own status item
-/// through the accessibility API. That is normally a privileged operation, but
-/// an application may always inspect *itself* without any TCC grant, which is
-/// what makes this viable without asking the user for Accessibility access.
-///
-/// This is best-effort by design. If the press fails for any reason the app
-/// simply carries on — the nudge is a courtesy, and breaking launch over it
-/// would be far worse than a user not seeing it.
+/// On a genuine first launch the user gets the nudge, not the release notes:
+/// being shown "what's new" in an app you have never used is meaningless, and
+/// the notes would bury the one thing that actually matters, which is finding
+/// the menu-bar item.
 @MainActor
 final class FirstRunNudge: NSObject, NSApplicationDelegate {
 
     private static let hasLaunchedKey = "hasLaunchedBefore"
+    private static let lastSeenVersionKey = "lastSeenVersion"
+
+    private var whatsNewWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let defaults = UserDefaults.standard
-        guard !defaults.bool(forKey: Self.hasLaunchedKey) else { return }
 
-        // Recorded immediately rather than after the attempt: a failed press
-        // must not mean a second nudge on the next launch.
-        defaults.set(true, forKey: Self.hasLaunchedKey)
+        if !defaults.bool(forKey: Self.hasLaunchedKey) {
+            defaults.set(true, forKey: Self.hasLaunchedKey)
+            // Record the version too, so upgrading later does not immediately
+            // show notes for a release the user was never really running.
+            defaults.set(Self.runningVersion, forKey: Self.lastSeenVersionKey)
+            openMenuOnce()
+            return
+        }
 
+        let seen = defaults.string(forKey: Self.lastSeenVersionKey)
+        if seen != Self.runningVersion {
+            defaults.set(Self.runningVersion, forKey: Self.lastSeenVersionKey)
+            // Only for a version that actually has notes. This also covers a user
+            // upgrading from a release so old it predates this mechanism.
+            if ReleaseNotes.current != nil {
+                showWhatsNew()
+            }
+        }
+    }
+
+    private static var runningVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+    }
+
+    // MARK: - What's New
+
+    private func showWhatsNew() {
+        guard let release = ReleaseNotes.current else { return }
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 420),
+            styleMask: [.titled, .closable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "DubScribe"
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: WhatsNewView(release: release) { [weak self] in
+            self?.closeWhatsNew()
+        })
+        window.center()
+        // An LSUIElement app does not become active on its own, so without this
+        // the window opens behind whatever is frontmost and its default button
+        // renders as an inactive grey — the prominent style only draws blue while
+        // the window is key. Activating is right for this one moment: the window
+        // is a deliberate, once-per-version interruption, not a background event.
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+
+        whatsNewWindow = window
+    }
+
+    private func closeWhatsNew() {
+        whatsNewWindow?.close()
+        whatsNewWindow = nil
+    }
+
+    // MARK: - First-run nudge
+
+    /// SwiftUI's `MenuBarExtra` has no public API to open itself, so the menu is
+    /// opened the same way a click would open it: by pressing our own status item
+    /// through the accessibility API. That is normally a privileged operation,
+    /// but an application may always inspect *itself* without any TCC grant,
+    /// which is what makes this viable without asking for Accessibility access.
+    ///
+    /// Best-effort by design. If the press fails the app carries on — a courtesy
+    /// that fails is far better than a launch that breaks.
+    private func openMenuOnce() {
         Task { @MainActor in
-            // The status item does not necessarily exist the instant the app
-            // finishes launching, so give it a moment to appear.
             for _ in 0..<20 {
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 if pressStatusItem() { return }
@@ -40,8 +101,6 @@ final class FirstRunNudge: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Finds this app's own status item and presses it. Returns whether the
-    /// press reported success.
     private func pressStatusItem() -> Bool {
         guard let item = statusItemElement() else { return false }
         return AXUIElementPerformAction(item, kAXPressAction as CFString) == .success

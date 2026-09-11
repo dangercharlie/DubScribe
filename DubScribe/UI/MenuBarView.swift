@@ -14,12 +14,24 @@ import AppKit
 /// is native rather than an imitation of one. That rules out custom views like
 /// sliders, which is not a loss — a menu closes the moment you click an item, so
 /// a scrubber could never show you anything anyway.
+///
+/// The middle section nests the settings that are *situational*: the ones you
+/// reach for while you are working, rather than while you are configuring. They
+/// remain in Settings as well; this is a second, closer handle on the same
+/// state, not a replacement. Anything you would only ever set once — shortcuts,
+/// sounds, the size budget — is left to Settings alone.
 struct MenuBarView: View {
     @EnvironmentObject var coordinator: AppCoordinator
     @Environment(\.openWindow) private var openWindow
 
     private var state: RecordingState { coordinator.recordingState }
     private var player: AudioPlayer { coordinator.audioPlayer }
+    private var settings: AppSettings { coordinator.settings }
+
+    /// Enumerated on each open rather than cached: devices come and go (a
+    /// headset connects, a display with a microphone is unplugged) and a stale
+    /// list is worse than a small cost on a menu that is opened rarely.
+    private var devices: [AudioInputDevice] { AudioInputDevice.availableDevices() }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -36,24 +48,30 @@ struct MenuBarView: View {
                 Divider()
             }
 
-            permissionItemIfNeeded
+            situationalSettings
 
-            Button("Settings…") {
-                NSApp.activate(ignoringOtherApps: true)
-                openWindow(id: "settings")
-            }
+            Divider()
 
-            Button("Reveal Clips Folder") {
-                coordinator.revealClipsFolder()
+            Button { coordinator.revealClipsFolder() } label: {
+                Label("Open Clips Folder", systemImage: "folder")
             }
 
             Divider()
 
-            Button("Quit DubScribe") {
-                NSApp.terminate(nil)
+            permissionItemIfNeeded
+
+            Button {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "settings")
+            } label: {
+                Label("Settings…", systemImage: "gearshape")
+            }
+
+            Button { NSApp.terminate(nil) } label: {
+                Label("Quit DubScribe", systemImage: "power")
             }
         }
-        .frame(minWidth: 240)
+        .frame(minWidth: 250)
     }
 
     // MARK: - Status
@@ -122,6 +140,57 @@ struct MenuBarView: View {
             .font(.system(size: 10))
             .foregroundColor(.secondary)
             .padding(.horizontal, 12)
+    }
+
+    // MARK: - Situational settings
+
+    @ViewBuilder
+    private var situationalSettings: some View {
+        Menu {
+            // A radio list, so the current device is visible without opening
+            // Settings to check which one is selected.
+            Picker("Microphone", selection: Binding(
+                get: { settings.selectedInputDeviceID ?? "system_default" },
+                set: { id in
+                    coordinator.settings.selectedInputDeviceID = id == "system_default" ? nil : id
+                    coordinator.applySettings()
+                }
+            )) {
+                ForEach(devices) { device in
+                    Text(device.name).tag(device.id)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            Label("Microphone", systemImage: "mic")
+        }
+
+        toggle("Show Level Indicator", systemImage: "waveform",
+               isOn: $coordinator.settings.showRecordingHUD)
+        toggle("Pause Media While Recording", systemImage: "pause.circle",
+               isOn: $coordinator.settings.pauseMediaDuringRecording)
+        toggle("Mute System Audio", systemImage: "speaker.slash",
+               isOn: $coordinator.settings.muteSystemAudioDuringRecording)
+        toggle("Delete Clips Automatically", systemImage: "trash",
+               isOn: $coordinator.settings.autoDeleteClips)
+    }
+
+    /// A menu checkmark rather than a switch.
+    ///
+    /// `.menu` style has no room for a switch control, and a checkmark is the
+    /// native way for a menu to express "this is on" — it is also what the
+    /// System Settings and Finder menus use. The state is saved on every change
+    /// exactly as the Settings window does, so the two surfaces cannot drift.
+    private func toggle(_ title: String, systemImage: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            Label(title, systemImage: systemImage)
+        }
+        .onChange(of: isOn.wrappedValue) { _ in
+            coordinator.applySettings()
+            // Deletion state changes should take effect at once rather than at
+            // the next sweep interval.
+            if title == "Delete Clips Automatically" { coordinator.clipStore.sweep() }
+        }
     }
 
     // MARK: - Permissions
