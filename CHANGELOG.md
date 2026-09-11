@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.7.1
+
+### Fixed
+
+- **"Pause media playback" no longer launches Apple Music.** With the setting on
+  and nothing playing, finishing a recording opened Music. The MediaRemote fallback
+  had no way to tell "I paused something" from "I sent a command into the void", so
+  it recorded a pause that never happened; the later play was read as *start
+  playback* and Music launched. Reproduced 6 times out of 6. The fallback is now
+  gated on another process actually producing audio output, so a play is only ever
+  sent if a pause was really sent. Nothing else about recording changes. This also
+  affected 0.6.4, whose guard shelled out to `nowplaying-cli` and failed open when
+  it was absent.
+- On macOS 13 the per-process audio check is unavailable, so the catch-all
+  fallback is skipped rather than risk launching Music. Spotify, Music, VLC and
+  Chrome still pause and resume normally, because those paths are only reached
+  when the app is already running.
+
+### Changed
+
+- The release workflow now builds a **draft** and pins the tag explicitly. The
+  draft-tag behaviour had been associating releases with a placeholder name, which
+  would have left the Homebrew cask download URL pointing at a tag that does not
+  exist.
+
 ## v0.7.0
 
 ### Added

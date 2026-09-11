@@ -19,7 +19,7 @@ enum ReleaseNotes {
         return all.first { $0.version == version }
     }
 
-    static let all: [Release] = [v0_7_0]
+    static let all: [Release] = [v0_7_1, v0_7_0]
 
     struct Release {
         let version: String
@@ -33,6 +33,20 @@ enum ReleaseNotes {
         let title: String
         let detail: String
     }
+
+    private static let v0_7_1 = Release(
+        version: "0.7.1",
+        tagline: "A fix for recordings that opened Apple Music.",
+        items: [
+            Item(symbol: "music.note",
+                 title: "\"Pause media\" stays out of Music",
+                 detail: "With pause media on and nothing playing, finishing a recording could open Apple Music. It no longer does. Pausing and resuming music you are actually listening to works exactly as before."),
+
+            Item(symbol: "speaker.slash",
+                 title: "Nothing playing means nothing to pause",
+                 detail: "DubScribe now checks whether any other app is producing sound before pausing. If none is, it leaves your audio alone instead of sending a play command into an empty room."),
+        ]
+    )
 
     private static let v0_7_0 = Release(
         version: "0.7.0",

@@ -27,6 +27,72 @@ actor SystemMediaController {
     }
     private var pausedSources = Set<PausedSource>()
 
+    // MARK: - Third-Party Audio Detection
+
+    /// Whether any process *other than DubScribe* is currently producing audio output.
+    ///
+    /// This exists to answer one narrow question: is there anything at all for the
+    /// MediaRemote fallback to pause? Its absence caused a user-visible bug. The
+    /// fallback used to fire unconditionally — `sendMediaRemote` reports whether the
+    /// symbol resolved, not whether anything paused — so `resumeMedia()` later sent
+    /// `play` with nothing playing. MediaRemote reads a bare play as "start
+    /// playback" and **launches Apple Music**. Reproduced 6 times out of 6.
+    ///
+    /// Note this deliberately ignores our own process. The start cue is audio output,
+    /// so including ourselves would make the answer permanently `true` and the gate
+    /// useless.
+    ///
+    /// Public CoreAudio only — no private framework, no permission. Returns `false`
+    /// on macOS below 14.2, where the per-process API does not exist. That is the
+    /// safe default: we skip a pause we cannot verify rather than risk launching
+    /// Music. The explicit players above are unaffected, because they are only
+    /// reached when their app is already running.
+    private func isOtherProcessProducingAudio() -> Bool {
+        guard #available(macOS 14.2, *) else { return false }
+
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyProcessObjectList,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(
+            AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size
+        ) == noErr else { return false }
+
+        var processObjects = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+        guard AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &processObjects
+        ) == noErr else { return false }
+
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+
+        for object in processObjects {
+            var runningAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioProcessPropertyIsRunningOutput,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var isRunning: UInt32 = 0
+            var runningSize = UInt32(MemoryLayout<UInt32>.size)
+            guard AudioObjectGetPropertyData(object, &runningAddress, 0, nil, &runningSize, &isRunning) == noErr,
+                  isRunning != 0 else { continue }
+
+            var pidAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioProcessPropertyPID,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var pid: pid_t = 0
+            var pidSize = UInt32(MemoryLayout<pid_t>.size)
+            guard AudioObjectGetPropertyData(object, &pidAddress, 0, nil, &pidSize, &pid) == noErr else { continue }
+
+            if pid != ownPID { return true }
+        }
+
+        return false
+    }
+
     // MARK: - System Volume (CoreAudio)
 
     /// Mute the default output device by setting volume to 0 and enabling mute.
@@ -125,14 +191,19 @@ actor SystemMediaController {
         // "Pause media playback" — and failed silently without it.
         //
         // MediaRemote does the same job through the same channel the keyboard's
-        // media keys use, and needs no permission at all. Verified on macOS 26:
-        // a binary with CGPreflightPostEventAccess() == 0 paused a playing track
-        // through this call.
+        // media keys use, and needs no permission at all.
+        //
+        // Gated on there actually being audio to pause. Without this check the
+        // bare `play` in resumeMedia() launches Apple Music when nothing was
+        // playing — see isOtherProcessProducingAudio().
         if pausedSources.isEmpty {
-            if sendMediaRemote(.pause) {
+            if isOtherProcessProducingAudio() {
+                sendMediaRemote(.pause)
                 pausedSources.insert(.mediaRemote)
                 logMedia("Paused via MediaRemote")
             } else {
+                // Nothing was playing, so nothing is paused. Leaving this empty is
+                // what stops resumeMedia() from sending a stray play command.
                 logMedia("No media detected as playing - skipping pause")
             }
         }
@@ -410,18 +481,25 @@ actor SystemMediaController {
         case togglePlayPause = 2
     }
 
-    @discardableResult
-    private func sendMediaRemote(_ command: MediaRemoteCommand) -> Bool {
-        guard let handle = Self.mediaRemoteHandle else { return false }
+    /// Send a command to MediaRemote.
+    ///
+    /// Deliberately returns nothing. It used to return `Bool`, which was read as
+    /// "something paused" when all it could ever mean was "the symbol resolved".
+    /// Callers gated on that value concluded a pause had happened when it had not,
+    /// and the later `play` launched Apple Music. There is no way to know locally
+    /// whether a command took effect, so this no longer claims to.
+    ///
+    /// Use `isOtherProcessProducingAudio()` to decide whether to send at all.
+    private func sendMediaRemote(_ command: MediaRemoteCommand) {
+        guard let handle = Self.mediaRemoteHandle else { return }
 
         // Registration happens at launch (see prepareMediaControl); this is the
         // belt-and-braces path for the unlikely case that pause is reached first.
         Self.registerWithMediaRemoteIfNeeded()
 
         typealias SendCommand = @convention(c) (Int32, CFDictionary?) -> Void
-        guard let sym = dlsym(handle, "MRMediaRemoteSendCommand") else { return false }
+        guard let sym = dlsym(handle, "MRMediaRemoteSendCommand") else { return }
         unsafeBitCast(sym, to: SendCommand.self)(command.rawValue, nil)
-        return true
     }
 
     /// The loaded MediaRemote framework, or nil if it cannot be opened.

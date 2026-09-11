@@ -53,9 +53,16 @@ jobs:
           # artifacts, then waits for a human to download the DMG, launch it, and
           # publish deliberately.
           #
+          # Explicit tag name. Without it, action-gh-release creates a *draft*
+          # under a placeholder tag (`untagged-<sha>`) instead of the pushed tag,
+          # so the release ends up associated with nothing and publishing it
+          # leaves the asset URLs — which the Homebrew cask uses — pointing at a
+          # tag that does not exist. Caught on 0.7.0 before it shipped.
+          #
           # Also note the tag is never checked against MARKETING_VERSION, so a
           # mismatched tag builds whatever happens to be in the tree.
           draft: true
+          tag_name: ${{ github.ref_name }}
           files: |
             release_dmg/DubScribe-macOS-arm64.dmg
             release_dmg/DubScribe-macOS-arm64.zip
