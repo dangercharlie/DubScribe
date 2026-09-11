@@ -55,6 +55,10 @@
   window. Audio playback and Reveal moved there too, and the first time you launch
   the menu opens itself once so the app introduces itself where it actually lives.
   Settings is unchanged as a place to configure things properly.
+- **A welcome window on first launch**, explaining that the app lives in the menu
+  bar, what to press, and where the clip goes. A menu-bar-only app has a
+  discoverability problem — you launch it and, as far as the screen is concerned,
+  nothing happens.
 - **A "What's New" window** appears once after an update, summarising what changed
   in the version you have just started using. It never appears on a first install,
   where it would tell you nothing you could act on.
