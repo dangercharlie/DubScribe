@@ -6,17 +6,20 @@
 	<key>com.apple.security.device.audio-input</key>
 	<true/>
 
-	<!-- No sandboxing: required for CGEventTap global key monitoring and SMAppService -->
+	<!-- No sandboxing. Required for two things:
+	     (a) SMAppService login-item registration, and
+	     (b) writing clips to a user-visible location and moving expired ones to
+	         the Trash via FileManager.trashItem.
+
+	     Note: this is NOT about global key monitoring. Global shortcuts use
+	     Carbon RegisterEventHotKey, which deliberately needs no Accessibility
+	     permission and installs no event tap. An earlier comment here claimed
+	     CGEventTap was required; that was stale. -->
 	<key>com.apple.security.app-sandbox</key>
 	<false/>
 
-	<!-- Temporary exception: allows reading/writing outside sandbox (needed without sandbox) -->
-	<!-- com.apple.security.temporary-exception.files.home-relative-path.read-write not needed without sandbox -->
-
-	<!-- Hardened runtime: JIT not needed -->
-	<!-- Hardened runtime: unsigned executable memory not needed -->
-
-	<!-- Allow sending Apple Events to Music, Spotify, and System Events -->
+	<!-- Allow sending Apple Events to Music, Spotify, and System Events for the
+	     optional pause/resume-media-while-recording feature. -->
 	<key>com.apple.security.automation.apple-events</key>
 	<true/>
 </dict>

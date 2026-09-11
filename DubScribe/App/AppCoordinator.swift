@@ -3,35 +3,93 @@ import Combine
 import AVFoundation
 import AppKit
 
-/// Central coordinator — owns audio, hotkeys, clipboard, playback, voice activation.
+/// Central coordinator — owns audio, hotkeys, clipboard, playback, retention.
 @MainActor
 final class AppCoordinator: ObservableObject {
 
     @Published var recordingState: RecordingState = .idle
-    @Published var settings: AppSettings = .load()
+    @Published var settings: AppSettings
     @Published var lastClipURL: URL?
     @Published var lastDuration: TimeInterval = 0
     @Published var isSettingsOpen = false
 
-    let audioRecorder           = AudioRecorder()
-    let audioPlayer             = AudioPlayer()
-    let hotkeyManager           = HotkeyManager()
-    let loginItemManager        = LoginItemManager()
-    let voiceActivationMonitor  = VoiceActivationMonitor()
-    let systemMediaController   = SystemMediaController()
-    lazy var micTestManager     = MicTestManager(audioRecorder: audioRecorder)
+    /// Transient, user-facing message shown in the status area and then cleared.
+    @Published var notice: String?
+
+    let audioRecorder   = AudioRecorder()
+    let audioPlayer     = AudioPlayer()
+    let hotkeyManager   = HotkeyManager()
+    let loginItemManager = LoginItemManager()
+    let systemMediaController = SystemMediaController()
+    let clipStore       = ClipStore()
+    lazy var micTestManager = MicTestManager(audioRecorder: audioRecorder)
+    lazy var recordingHUD = RecordingHUDController(recorder: audioRecorder)
+
+    /// Hard ceiling on a single recording. Hold-to-record plus a stuck key
+    /// would otherwise fill the disk. Generous enough to never interrupt a
+    /// real voice note.
+    static let maxRecordingSeconds: TimeInterval = 300
 
     private var cancellables = Set<AnyCancellable>()
     private var pendingStartTask: Task<Void, Never>?
     private var pendingMediaPauseTask: Task<Void, Never>?
+    private var autoStopTask: Task<Void, Never>?
+    private var noticeTask: Task<Void, Never>?
+
+    /// The most recent app that was frontmost, excluding DubScribe itself.
+    ///
+    /// The indicator names where the clip will land, which only helps if it
+    /// names the app the user is actually working in. Reading the frontmost app
+    /// at the instant capture begins is not enough: pressing the shortcut while
+    /// DubScribe's own window has focus would name DubScribe. Remembering the
+    /// last *other* app keeps the answer useful in that case.
+    private var lastForeignApp: NSRunningApplication?
+
+    /// Retained so the observation could be torn down with the coordinator.
+    private var activationObserver: NSObjectProtocol?
 
     init() {
-        // Wire voice monitor to use the recorder's level
-        voiceActivationMonitor.audioRecorder = audioRecorder
+        // Settings first — policy below depends on them.
+        switch AppSettings.loadResult() {
+        case .loaded(let loaded):
+            settings = loaded
+        case .freshInstall:
+            settings = .default
+        case .recoveredFromCorrupt:
+            // Do not silently pretend this was a fresh install.
+            settings = .default
+            notice = "Saved settings could not be read, so defaults were restored."
+        }
+
+        // One-time move of clips out of the pre-0.7.0 ~/Music location.
+        let migrated = FileManagerHelpers.migrateLegacyClipsIfNeeded()
+
         wireAudio()
         wireHotkeys()
-        wireVoiceActivation()
+
+        // Track the frontmost app so the indicator can name the destination.
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                  app.bundleIdentifier != Bundle.main.bundleIdentifier else { return }
+            MainActor.assumeIsolated { self?.lastForeignApp = app }
+        }
+
+        clipStore.onClipsChanged = { [weak self] in
+            self?.objectWillChange.send()
+        }
+
         applySettings()
+
+        clipStore.reconcileOnLaunch()
+        clipStore.startMonitoring()
+
+        if migrated > 0 {
+            postNotice("Moved \(migrated) existing clip\(migrated == 1 ? "" : "s") into DubScribe's app storage.")
+        }
     }
 
     // MARK: - Wiring
@@ -61,18 +119,6 @@ final class AppCoordinator: ObservableObject {
         }
     }
 
-    private func wireVoiceActivation() {
-        voiceActivationMonitor.onVoiceStarted = { [weak self] in
-            guard let self, !self.recordingState.isRecording else { return }
-            if self.isSettingsOpen || self.micTestManager.state != .idle { return }
-            self.startRecording(trigger: .voiceActivation)
-        }
-        voiceActivationMonitor.onVoiceStopped = { [weak self] in
-            guard let self, self.recordingState.trigger == .voiceActivation else { return }
-            self.stopRecording()
-        }
-    }
-
     // MARK: - Recording Control
 
     func startRecording(trigger: RecordingTrigger = .manual) {
@@ -91,20 +137,43 @@ final class AppCoordinator: ObservableObject {
             pendingStartTask?.cancel()
             pendingMediaPauseTask?.cancel()
             pendingStartTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(nanoseconds: 16_000_000)
-                guard let self, !Task.isCancelled, self.recordingState.isRecording else { return }
+                guard let self else { return }
 
-                // Stop the monitor engine before starting the recording engine
-                // to avoid two AVAudioEngines on the same input device.
-                // The recording engine's own buffer tap updates inputLevel,
-                // so the voice activation monitor can still detect silence.
-                self.audioRecorder.stopLevelMonitoring()
+                // Optional start cue. When it is enabled it must finish *before*
+                // the microphone opens: it is audible through the speakers, so
+                // playing it after the engine had started put it at the head of
+                // every recording — a distinct transient about 140 ms in, at a
+                // level comparable to speech. When it is switched off this
+                // returns straight away and capture begins with no pre-roll.
+                await self.playStartCueAndWait()
+
+                guard !Task.isCancelled, self.recordingState.isRecording else { return }
+
                 self.audioRecorder.startRecording()
-                self.voiceActivationMonitor.setRecordingActive(true)
                 self.micTestManager.isRealRecordingActive = true
 
-                self.playSound(named: "Tink")
+                // Visual feedback for the running take. On by default, and the
+                // reason the start cue is now redundant enough to be opt-in.
+                if self.settings.showRecordingHUD {
+                    // Name the destination before showing it: the frontmost app
+                    // is where the clip is about to be pasted, falling back to
+                    // the last other app when DubScribe itself has focus.
+                    let front = NSWorkspace.shared.frontmostApplication
+                    let target = (front?.bundleIdentifier == Bundle.main.bundleIdentifier)
+                        ? self.lastForeignApp
+                        : front
+                    self.recordingHUD.setTargetApplication(
+                        name: target?.localizedName,
+                        icon: target?.icon
+                    )
+                    self.recordingHUD.show()
+                }
+                // Capture starts now, so stamp the clock now rather than when the
+                // shortcut was pressed.
+                self.recordingState = .recording(startedAt: Date(), trigger: trigger)
                 print("[DubScribe] Recording started (trigger=\(trigger))")
+
+                self.scheduleAutoStop()
 
                 if shouldMuteSystemAudio || shouldPauseMedia {
                     self.pendingMediaPauseTask = Task { @MainActor [weak self] in
@@ -137,6 +206,9 @@ final class AppCoordinator: ObservableObject {
         pendingStartTask = nil
         pendingMediaPauseTask?.cancel()
         pendingMediaPauseTask = nil
+        autoStopTask?.cancel()
+        autoStopTask = nil
+
         let recorderWasActive = audioRecorder.isRecording
         recordingState = .processing
         lastDuration = audioRecorder.recordingDuration
@@ -146,9 +218,7 @@ final class AppCoordinator: ObservableObject {
             return
         }
 
-        audioRecorder.stopLevelMonitoring()
         audioRecorder.stopRecording()
-        voiceActivationMonitor.setRecordingActive(false)
         micTestManager.isRealRecordingActive = false
 
         let shouldRestoreSystemAudio = settings.muteSystemAudioDuringRecording
@@ -174,70 +244,53 @@ final class AppCoordinator: ObservableObject {
         playSound(named: "Pop")
     }
 
+    /// Watchdog so a forgotten recording cannot run forever.
+    private func scheduleAutoStop() {
+        autoStopTask?.cancel()
+        autoStopTask = Task { @MainActor [weak self] in
+            let seconds = UInt64(AppCoordinator.maxRecordingSeconds * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: seconds)
+            guard let self, !Task.isCancelled, self.recordingState.isRecording else { return }
+            self.stopRecording()
+            self.postNotice("Stopped at the \(Int(AppCoordinator.maxRecordingSeconds / 60))-minute limit.")
+        }
+    }
+
     private func handleRecordingFinished(url: URL?) {
         guard let url else {
+            // Nothing usable was captured, so take the indicator down rather than
+            // confirming a clip that does not exist.
+            recordingHUD.hide()
             recordingState = .failed(audioRecorder.lastError ?? "Unknown recording error.")
-            restoreVoiceState()
             return
         }
+
+        // Discard a clip that captured nothing rather than putting silence on
+        // the clipboard — a silent paste looks like the app is broken.
+        if audioRecorder.lastPeakLevel < 0.002 {
+            try? FileManager.default.trashItem(at: url, resultingItemURL: nil)
+            recordingHUD.hide()
+            recordingState = .failed("Nothing was captured — check the input device.")
+            postNotice("Nothing was captured. Check the input device in Settings.")
+            return
+        }
+
         let success = ClipboardManager.copyWAVFile(url)
         if success {
             lastClipURL = url
             recordingState = .copied(url)
+            clipStore.noteCopied(url)
             audioPlayer.load(url: url)
+            clipStore.notePlayerLoaded(url)
+            // Only confirm once the clip is genuinely on the clipboard.
+            if settings.showRecordingHUD { recordingHUD.confirmCopied() }
         } else {
+            recordingHUD.hide()
             recordingState = .failed("Could not copy file to clipboard.")
         }
-        restoreVoiceState()
     }
 
-    private func restoreVoiceState() {
-        if settings.voiceActivationEnabled {
-            // Resume level monitoring for voice activation
-            audioRecorder.startLevelMonitoring()
-            if !recordingState.isRecording {
-                recordingState = .listeningForVoice
-            }
-        } else if case .listeningForVoice = recordingState {
-            recordingState = .idle
-        }
-    }
-
-    // MARK: - Settings
-
-    func applySettings() {
-        settings.save()
-        hotkeyManager.configure(holdHotkey: settings.holdHotkey, pushHotkey: settings.pushHotkey)
-        voiceActivationMonitor.threshold  = settings.voiceActivationThreshold
-        voiceActivationMonitor.stopDelay  = settings.voiceActivationStopDelay
-        micTestManager.threshold          = settings.voiceActivationThreshold
-
-        if settings.voiceActivationEnabled {
-            audioRecorder.startLevelMonitoring()
-            voiceActivationMonitor.startMonitoring()
-            if !recordingState.isRecording {
-                recordingState = .listeningForVoice
-            }
-        } else {
-            if !recordingState.isRecording {
-                audioRecorder.stopLevelMonitoring()
-            }
-            voiceActivationMonitor.stopMonitoring()
-            if case .listeningForVoice = recordingState { recordingState = .idle }
-        }
-    }
-
-    func resetHoldHotkey() { settings.holdHotkey = .defaultHoldHotkey; applySettings() }
-    func resetPushHotkey() { settings.pushHotkey = .defaultPushHotkey; applySettings() }
-
-    // MARK: - Sounds
-
-    private func playSound(named name: String) {
-        guard settings.playSounds else { return }
-        NSSound(named: name)?.play()
-    }
-
-    // MARK: - Reveal
+    // MARK: - Last clip
 
     func revealLastClip() {
         guard let url = lastClipURL else { return }
@@ -245,6 +298,155 @@ final class AppCoordinator: ObservableObject {
     }
 
     func revealClipsFolder() { FileManagerHelpers.revealClipsFolder() }
+
+    /// Put the most recent clip back on the clipboard without re-recording.
+    /// Cheap, and it rescues the common "I pasted into the wrong window" case.
+    @discardableResult
+    func copyLastClipAgain() -> Bool {
+        guard let url = lastClipURL,
+              FileManager.default.fileExists(atPath: url.path) else {
+            postNotice("The last clip is no longer available.")
+            return false
+        }
+        let ok = ClipboardManager.copyWAVFile(url)
+        if ok {
+            clipStore.noteCopied(url)
+            recordingState = .copied(url)
+            postNotice("Copied to clipboard.")
+        }
+        return ok
+    }
+
+    // MARK: - Settings
+
+    func applySettings() {
+        // Sanitise stored hotkeys before registering them.
+        //
+        // A pre-0.7.0 build could persist a shortcut with no modifier — a bare
+        // "R", say — which `RegisterEventHotKey` accepts and which then swallows
+        // that key system-wide. Anyone already in that state gets repaired here
+        // rather than having it re-armed on every launch.
+        var repaired: String?
+        if let reason = settings.holdHotkey.rejectionReason {
+            settings.holdHotkey = .defaultHoldHotkey
+            repaired = reason
+        }
+        if let reason = settings.pushHotkey.rejectionReason {
+            settings.pushHotkey = .defaultPushHotkey
+            repaired = reason
+        }
+        if let repaired {
+            postNotice("Shortcut reset to default — \(repaired)")
+        }
+
+        // Guard against nonsense values from a hand-edited or corrupt blob.
+        let retention = max(15, settings.clipRetentionMinutes * 60)
+        let capBytes = Int64(max(10, settings.maxClipsSizeMB) * 1024 * 1024)
+        clipStore.policy = ClipPolicy(
+            autoDelete: settings.autoDeleteClips,
+            retention: retention,
+            maxTotalBytes: capBytes
+        )
+
+        settings.save()
+        hotkeyManager.configure(holdHotkey: settings.holdHotkey, pushHotkey: settings.pushHotkey)
+        micTestManager.threshold = settings.micTestThreshold
+
+        // With voice activation gone the microphone is no longer held open
+        // permanently. It is only hot during a real recording or an explicit
+        // mic test — which also means no standing orange indicator.
+        if micTestManager.state == .idle, !recordingState.isRecording {
+            audioRecorder.stopLevelMonitoring()
+        }
+
+        // Turning the indicator off should take effect immediately, even if it is
+        // currently on screen mid-recording.
+        updateHUDAppearance()
+    }
+
+    /// Appearance-only update for the indicator, safe to call on every slider
+    /// tick.
+    ///
+    /// Deliberately separate from `applySettings()`, which re-registers global
+    /// hotkeys and writes to disk — running that dozens of times a second while a
+    /// slider is dragged would be both wasteful and disruptive.
+    func updateHUDAppearance() {
+        recordingHUD.setBackdropOpacity(settings.hudOpacity)
+        if !settings.showRecordingHUD { recordingHUD.hide() }
+    }
+
+    func resetHoldHotkey() { settings.holdHotkey = .defaultHoldHotkey; applySettings() }
+    func resetPushHotkey() { settings.pushHotkey = .defaultPushHotkey; applySettings() }
+
+    // MARK: - Notices
+
+    func postNotice(_ message: String) {
+        notice = message
+        noticeTask?.cancel()
+        noticeTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.notice = nil
+        }
+    }
+
+    func dismissNotice() {
+        noticeTask?.cancel()
+        notice = nil
+    }
+
+    // MARK: - Sounds
+
+    private func playSound(named name: String) {
+        guard settings.playSounds else { return }
+        guard let sound = NSSound(named: name) else { return }
+        // Play the cue quietly. `NSSound` plays at the full system output volume,
+        // which is startling when your output is turned up — and considerably
+        // worse over a Bluetooth headset, which macOS has usually pushed into
+        // narrowband call mode because we just opened the microphone.
+        sound.volume = Self.cueVolume
+        sound.play()
+    }
+
+    /// How loud the start/stop cue plays, as a fraction of system output volume.
+    ///
+    /// Reported by a user as "the beep very loud even when im using the
+    /// integrated mic" — the cue is unrelated to the chosen input, so the only
+    /// fix is to stop playing it at full output volume.
+    private static let cueVolume: Float = 0.35
+
+    /// How long to wait after the start cue before opening the microphone.
+    ///
+    /// Deliberately *not* derived from `NSSound.duration`. These system sounds
+    /// carry long silent tails: `Tink` reports 0.564 s but is only audible for
+    /// its first ~40 ms, and `Pop` reports 1.627 s but is audible for ~0.2 s.
+    /// Waiting on the reported duration would add two thirds of a second of lag
+    /// to every recording for no benefit.
+    ///
+    /// 0.2 s comfortably covers the cue plus its room decay, and is short enough
+    /// that pressing a shortcut still feels immediate.
+    private static let startCueLeadTime: TimeInterval = 0.2
+
+    /// Play the start cue and wait for it to finish before returning.
+    ///
+    /// Used on the *start* path only, and only when the opt-in start cue is
+    /// enabled: the microphone is about to open, so anything still sounding would
+    /// be recorded. With the cue switched off there is no pre-roll delay at all,
+    /// so capture starts immediately — which is the point of making it optional.
+    ///
+    /// The stop path deliberately uses the non-blocking `playSound`, because by
+    /// then the microphone is already closed.
+    private func playStartCueAndWait() async {
+        guard settings.playStartCue, let sound = NSSound(named: "Tink") else {
+            // Keep the small deferral the start path always had, so the UI state
+            // settles before capture begins.
+            try? await Task.sleep(nanoseconds: 16_000_000)
+            return
+        }
+        sound.volume = Self.cueVolume
+        sound.play()
+        try? await Task.sleep(nanoseconds: UInt64(Self.startCueLeadTime * 1_000_000_000))
+    }
 
     // MARK: - Permissions
 

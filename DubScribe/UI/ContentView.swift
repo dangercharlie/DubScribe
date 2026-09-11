@@ -7,49 +7,52 @@ struct ContentView: View {
     @State private var pulseAnimation = false
     @State private var micGranted = PermissionHelpers.isMicrophoneAuthorized
     @State private var displayDuration: TimeInterval = 0
+    @State private var ticker: Timer?
 
     private var state: RecordingState { coordinator.recordingState }
     private var allGranted: Bool { micGranted }
 
     var body: some View {
         ZStack {
-            backgroundGradient.ignoresSafeArea()
+            // Semantic background rather than a hardcoded gradient, so light and
+            // dark mode both work and the window matches the rest of macOS.
+            Color(nsColor: .windowBackgroundColor)
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 headerSection
-                    .padding(.top, 28)
-                    .padding(.horizontal, 28)
+                    .padding(.top, 22)
+                    .padding(.horizontal, 24)
 
                 Divider()
-                    .background(Color.white.opacity(0.08))
-                    .padding(.top, 18)
+                    .padding(.top, 16)
 
                 ScrollView {
-                    VStack(spacing: 18) {
+                    VStack(spacing: 16) {
                         recordingIndicator
                         statusCard
                         controlsSection
                         lastClipSection
+                        retentionNote
                         permissionsSection
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 24)
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 20)
                 }
             }
         }
-        .frame(width: 460, height: 600)
+        .frame(width: 460, height: 620)
         .onAppear {
             permissionsExpanded = !allGranted
+            if state.isRecording { startTicker() }
         }
-        .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
-            if let startedAt = state.startedAt {
-                displayDuration = Date().timeIntervalSince(startedAt)
-            } else {
-                displayDuration = 0
-            }
+        .onDisappear { stopTicker() }
+        .onChange(of: state.isRecording) { isRec in
+            pulseAnimation = isRec
+            if isRec { startTicker() } else { stopTicker(); displayDuration = 0 }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            // Refresh permission state when user returns from System Settings
+            // Refresh permission state when the user returns from System Settings
             micGranted = PermissionHelpers.isMicrophoneAuthorized
             permissionsExpanded = !micGranted
         }
@@ -58,44 +61,59 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Background
+    // MARK: - Ticker
+    //
+    // Only runs while recording. Previously this was an always-on 10 Hz
+    // publisher, which meant an idle menu-bar utility redrew its whole window
+    // ten times a second forever.
 
-    private var backgroundGradient: some View {
-        LinearGradient(
-            colors: [
-                Color(hue: 0.62, saturation: 0.85, brightness: 0.12),
-                Color(hue: 0.68, saturation: 0.90, brightness: 0.08)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+    private func startTicker() {
+        guard ticker == nil else { return }
+        ticker = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            Task { @MainActor in
+                if let startedAt = coordinator.recordingState.startedAt {
+                    displayDuration = Date().timeIntervalSince(startedAt)
+                }
+            }
+        }
+    }
+
+    private func stopTicker() {
+        ticker?.invalidate()
+        ticker = nil
     }
 
     // MARK: - Header
 
     private var headerSection: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 12) {
+            Image("AppMark")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 30, height: 30)
+                .foregroundStyle(Color.accentColor)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 1) {
                 Text("DubScribe")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.primary)
                 Text(headerSubtitle)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.45))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
                     .animation(.easeInOut, value: headerSubtitle)
             }
+
             Spacer()
+
             Button {
                 coordinator.isSettingsOpen = true
             } label: {
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(.white.opacity(0.6))
-                    .frame(width: 32, height: 32)
-                    .background(Color.white.opacity(0.08))
-                    .clipShape(Circle())
+                Image(systemName: "gearshape")
+                    .font(.system(size: 15))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.borderless)
             .accessibilityLabel("Open Settings")
             .help("Open DubScribe settings")
         }
@@ -103,16 +121,14 @@ struct ContentView: View {
 
     private var headerSubtitle: String {
         switch state {
-        case .listeningForVoice:
-            return "Listening for voice activity…"
         case .recording(_, let trigger):
             switch trigger {
-            case .holdHotkey: return "Hold \(coordinator.settings.holdHotkey.displayString) to record"
+            case .holdHotkey: return "Release \(coordinator.settings.holdHotkey.displayString) to stop"
             case .pushHotkey: return "Press \(coordinator.settings.pushHotkey.displayString) again to stop"
             default: return "Recording in progress"
             }
         default:
-            return "Hold \(coordinator.settings.holdHotkey.displayString) · Push \(coordinator.settings.pushHotkey.displayString)"
+            return "\(coordinator.settings.holdHotkey.displayString) to hold · \(coordinator.settings.pushHotkey.displayString) to toggle"
         }
     }
 
@@ -121,102 +137,58 @@ struct ContentView: View {
     private var recordingIndicator: some View {
         ZStack {
             if state.isRecording {
-                // Outer pulse ring - only during active recording
                 Circle()
-                    .stroke(Color.red.opacity(0.3), lineWidth: 2)
-                    .frame(width: 130, height: 130)
-                    .scaleEffect(pulseAnimation ? 1.25 : 1.0)
-                    .opacity(pulseAnimation ? 0 : 0.8)
-                    .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: false), value: pulseAnimation)
-                    .onAppear { pulseAnimation = true }
-
-                Circle()
-                    .stroke(Color.red.opacity(0.2), lineWidth: 3)
-                    .frame(width: 110, height: 110)
-                    .scaleEffect(pulseAnimation ? 1.15 : 1.0)
-                    .opacity(pulseAnimation ? 0.1 : 0.7)
-                    .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: false).delay(0.15), value: pulseAnimation)
+                    .stroke(Color.accentColor.opacity(0.25), lineWidth: 2)
+                    .frame(width: 96, height: 96)
+                    .scaleEffect(pulseAnimation ? 1.22 : 1.0)
+                    .opacity(pulseAnimation ? 0 : 0.7)
+                    .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: false), value: pulseAnimation)
             }
 
             Circle()
                 .fill(indicatorFill)
-                .frame(width: 88, height: 88)
-                .shadow(color: indicatorShadow, radius: 20, x: 0, y: 4)
+                .frame(width: 72, height: 72)
 
             Image(systemName: indicatorIcon)
-                .font(.system(size: 32, weight: .semibold))
-                .foregroundColor(.white)
-                // Only breathe gently while recording; completely static otherwise
-                .scaleEffect(state.isRecording ? (pulseAnimation ? 1.06 : 1.0) : 1.0)
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(.white)
         }
-        .frame(height: 140)
-        .onChange(of: state.isRecording) { isRec in
-            if isRec {
-                pulseAnimation = true
-            } else {
-                pulseAnimation = false
-            }
-        }
+        .frame(height: 112)
         .accessibilityLabel(indicatorAccessibilityLabel)
     }
 
     private var indicatorFill: some ShapeStyle {
         switch state {
         case .recording:
-            return AnyShapeStyle(LinearGradient(
-                colors: [Color(hue: 0.0, saturation: 0.85, brightness: 0.9),
-                         Color(hue: 0.02, saturation: 0.80, brightness: 0.7)],
-                startPoint: .topLeading, endPoint: .bottomTrailing))
+            return AnyShapeStyle(Color.red)
         case .copied:
-            return AnyShapeStyle(LinearGradient(
-                colors: [Color(hue: 0.38, saturation: 0.75, brightness: 0.7),
-                         Color(hue: 0.42, saturation: 0.80, brightness: 0.5)],
-                startPoint: .topLeading, endPoint: .bottomTrailing))
+            return AnyShapeStyle(Color.green)
         case .failed:
-            return AnyShapeStyle(LinearGradient(
-                colors: [Color(hue: 0.08, saturation: 0.85, brightness: 0.8),
-                         Color(hue: 0.05, saturation: 0.90, brightness: 0.6)],
-                startPoint: .topLeading, endPoint: .bottomTrailing))
-        case .listeningForVoice:
-            return AnyShapeStyle(LinearGradient(
-                colors: [Color(hue: 0.62, saturation: 0.60, brightness: 0.45),
-                         Color(hue: 0.65, saturation: 0.65, brightness: 0.30)],
-                startPoint: .topLeading, endPoint: .bottomTrailing))
+            return AnyShapeStyle(Color.orange)
         default:
-            return AnyShapeStyle(LinearGradient(
-                colors: [Color.white.opacity(0.14), Color.white.opacity(0.06)],
-                startPoint: .topLeading, endPoint: .bottomTrailing))
-        }
-    }
-
-    private var indicatorShadow: Color {
-        switch state {
-        case .recording: return .red.opacity(0.5)
-        case .copied: return .green.opacity(0.4)
-        case .listeningForVoice: return Color(hue: 0.62, saturation: 0.6, brightness: 0.5).opacity(0.5)
-        default: return .black.opacity(0.4)
+            // A mid grey, so the white glyph keeps contrast in both light and
+            // dark mode. `.quaternaryLabelColor` was too faint in light mode.
+            return AnyShapeStyle(Color(nsColor: .systemGray))
         }
     }
 
     private var indicatorIcon: String {
         switch state {
-        case .idle:              return "mic"          // calm, static mic
-        case .listeningForVoice: return "ear"          // listening
-        case .recording:         return "mic.fill"     // active recording
-        case .processing:        return "waveform"
-        case .copied:            return "checkmark"
-        case .failed:            return "exclamationmark.triangle"
+        case .idle:          return "mic"
+        case .recording:     return "mic.fill"
+        case .processing:    return "waveform"
+        case .copied:        return "checkmark"
+        case .failed:        return "exclamationmark.triangle"
         }
     }
 
     private var indicatorAccessibilityLabel: String {
         switch state {
-        case .idle:              return "Microphone idle"
-        case .listeningForVoice: return "Listening for voice"
-        case .recording:         return "Recording audio"
-        case .processing:        return "Processing recording"
-        case .copied:            return "Recording copied to clipboard"
-        case .failed(let m):     return "Error: \(m)"
+        case .idle:          return "Microphone idle"
+        case .recording:     return "Recording audio"
+        case .processing:    return "Processing recording"
+        case .copied:        return "Recording copied to clipboard"
+        case .failed(let m): return "Error: \(m)"
         }
     }
 
@@ -225,30 +197,39 @@ struct ContentView: View {
     private var statusCard: some View {
         VStack(spacing: 6) {
             Text(state.displayText)
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .foregroundColor(.white)
-                .contentTransition(.identity)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.primary)
 
             if case .recording = state {
                 Text(durationString(displayDuration))
-                    .font(.system(size: 28, weight: .bold, design: .monospaced))
-                    .foregroundColor(.red.opacity(0.9))
-                    .contentTransition(.identity)
+                    .font(.system(size: 26, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.red)
                     .accessibilityLabel("Recording duration: \(durationString(displayDuration))")
-            } else if coordinator.lastDuration > 0 && !state.isRecording {
-                Text("Last: \(durationString(coordinator.lastDuration))")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white.opacity(0.45))
+            } else if coordinator.lastDuration > 0 {
+                Text("Last recording: \(durationString(coordinator.lastDuration))")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+
+            if let notice = coordinator.notice {
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 11))
+                    Text(notice)
+                        .font(.system(size: 11))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(.secondary)
+                .padding(.top, 2)
+                .accessibilityElement(children: .combine)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(Color.white.opacity(0.05))
-                .overlay(RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1))
-        )
+        .padding(.vertical, 14)
+        .padding(.horizontal, 14)
+        .background(CardBackground())
     }
 
     private func durationString(_ t: TimeInterval) -> String {
@@ -258,7 +239,7 @@ struct ContentView: View {
         return String(format: "%d:%02d.%d", mins, secs, tenths)
     }
 
-    // MARK: - Controls
+    // MARK: - Primary Action
 
     private var controlsSection: some View {
         Button {
@@ -268,86 +249,103 @@ struct ContentView: View {
                 coordinator.startRecording(trigger: .manual)
             }
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: 7) {
                 Image(systemName: state.isRecording ? "stop.fill" : "record.circle")
-                    .font(.system(size: 15, weight: .semibold))
-                Text(state.isRecording ? "Stop Recording" : "Start Recording")
                     .font(.system(size: 14, weight: .semibold))
+                Text(state.isRecording ? "Stop Recording" : "Start Recording")
+                    .font(.system(size: 13, weight: .semibold))
             }
-            .contentTransition(.identity)
-            .foregroundColor(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(state.isRecording
-                          ? Color.red.opacity(0.8)
-                          : Color(hue: 0.62, saturation: 0.6, brightness: 0.5))
-            )
+            .padding(.vertical, 8)
         }
-        .buttonStyle(.plain)
-        .help(state.isRecording ? "Stop and save the current recording." : "Start recording audio from the selected microphone.")
+        .buttonStyle(.borderedProminent)
+        .tint(state.isRecording ? .red : .accentColor)
+        .controlSize(.large)
+        .help(state.isRecording
+              ? "Stop and copy the recording to the clipboard."
+              : "Start recording from the selected microphone.")
     }
 
-    // MARK: - Last Clip Section
+    // MARK: - Last Clip / Empty State
 
     @ViewBuilder
     private var lastClipSection: some View {
         if let url = coordinator.lastClipURL {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Last Recording")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.4))
-                    .textCase(.uppercase)
-                    .tracking(1)
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel("Last Recording")
 
                 VStack(spacing: 10) {
-                    // File info row
                     HStack(spacing: 10) {
-                        Image(systemName: "waveform.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundColor(Color(hue: 0.62, saturation: 0.6, brightness: 0.7))
+                        Image("ClipGlyph")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 24, height: 24)
+                            .foregroundStyle(Color.accentColor)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(url.lastPathComponent)
-                                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                                .foregroundColor(.white.opacity(0.8))
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(.primary)
                                 .lineLimit(1)
+                                .truncationMode(.middle)
                             HStack(spacing: 6) {
                                 if let size = fileSize(url) {
                                     Text(size)
-                                        .font(.system(size: 11))
-                                        .foregroundColor(.white.opacity(0.4))
                                 }
                                 if coordinator.lastDuration > 0 {
                                     Text("· \(durationString(coordinator.lastDuration))")
-                                        .font(.system(size: 11))
-                                        .foregroundColor(.white.opacity(0.4))
                                 }
                             }
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
                         }
-                        Spacer()
+                        Spacer(minLength: 0)
                     }
 
-                    // Playback controls row
                     PlaybackControlsView(player: coordinator.audioPlayer, url: url)
                 }
                 .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.white.opacity(0.05))
-                        .overlay(RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 1))
-                )
+                .background(CardBackground())
 
-                // Reveal button
-                HStack {
-                    Spacer()
+                HStack(spacing: 8) {
+                    Button {
+                        coordinator.copyLastClipAgain()
+                    } label: {
+                        Label("Copy Again", systemImage: "doc.on.doc")
+                    }
+                    .help("Put the last clip back on the clipboard without re-recording.")
+
                     Button("Reveal in Finder") { coordinator.revealLastClip() }
-                        .buttonStyle(GhostButtonStyle())
-                        .help("Reveal last recording in Finder")
+                        .help("Reveal the last recording in Finder")
+
+                    Spacer()
                 }
+                .font(.system(size: 12))
             }
+        } else {
+            VStack(spacing: 10) {
+                Image("EmptyState")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 64)
+                    .foregroundStyle(Color(nsColor: .tertiaryLabelColor))
+                    .accessibilityHidden(true)
+
+                Text("No recordings yet")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Text("Use a shortcut, or press Start Recording. The clip lands on your clipboard ready to paste.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
+            .padding(.horizontal, 16)
+            .background(CardBackground())
         }
     }
 
@@ -360,6 +358,31 @@ struct ContentView: View {
             : String(format: "%.2f MB", kb / 1024)
     }
 
+    // MARK: - Retention note
+
+    @ViewBuilder
+    private var retentionNote: some View {
+        HStack(alignment: .top, spacing: 7) {
+            Image(systemName: coordinator.settings.autoDeleteClips ? "clock.arrow.circlepath" : "tray.full")
+                .font(.system(size: 11))
+            Text(retentionDescription)
+                .font(.system(size: 11))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(.tertiary)
+        .padding(.horizontal, 4)
+    }
+
+    private var retentionDescription: String {
+        guard coordinator.settings.autoDeleteClips else {
+            return "Clips are kept until you delete them. Turn on auto-delete in Settings to reclaim disk automatically."
+        }
+        let mins = coordinator.settings.clipRetentionMinutes
+        let shown = mins == floor(mins) ? String(Int(mins)) : String(format: "%.1f", mins)
+        return "Clips move to the Trash \(shown) minute\(mins == 1 ? "" : "s") after they leave the clipboard, so they stay pasteable but don't pile up."
+    }
+
     // MARK: - Permissions Section (Collapsible)
 
     private var permissionsSection: some View {
@@ -368,79 +391,60 @@ struct ContentView: View {
                 withAnimation(.easeInOut(duration: 0.2)) { permissionsExpanded.toggle() }
             } label: {
                 HStack {
-                    Image(systemName: micGranted ? "checkmark.shield.fill" : "exclamationmark.shield.fill")
-                        .foregroundColor(micGranted
-                                         ? Color(hue: 0.38, saturation: 0.7, brightness: 0.65)
-                                         : .orange)
-                        .font(.system(size: 13))
+                    Image(systemName: micGranted ? "checkmark.shield" : "exclamationmark.shield")
+                        .foregroundStyle(micGranted ? Color.green : Color.orange)
+                        .font(.system(size: 12))
 
-                    Text(micGranted ? "Permissions ✓" : "Microphone Required")
+                    Text(micGranted ? "Permissions" : "Microphone Required")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(micGranted ? .white.opacity(0.5) : .orange)
+                        .foregroundStyle(micGranted ? Color.secondary : Color.orange)
 
                     Spacer()
 
                     Image(systemName: permissionsExpanded ? "chevron.up" : "chevron.down")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.35))
+                        .foregroundStyle(.tertiary)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
             }
             .buttonStyle(.plain)
 
             if permissionsExpanded {
                 VStack(spacing: 6) {
-                    Divider().background(Color.white.opacity(0.06)).padding(.horizontal, 4)
+                    Divider().padding(.horizontal, 4)
 
                     PermissionRowView(
-                        icon: "mic.fill",
+                        icon: "mic",
                         label: "Microphone",
                         granted: micGranted,
                         action: { PermissionHelpers.openMicrophoneSettings() }
                     )
 
-                    // Carbon hotkeys — no Accessibility needed
                     HStack(spacing: 10) {
                         Image(systemName: "keyboard")
-                            .font(.system(size: 13))
-                            .foregroundColor(Color(hue: 0.38, saturation: 0.7, brightness: 0.7))
-                            .frame(width: 20)
-                        Text("Global Hotkeys (Carbon)")
-                            .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.7))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 18)
+                        Text("Global Hotkeys")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
                         Spacer()
                         Text(coordinator.hotkeyManager.hotkeysRegistered ? "Active" : "Check app")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(coordinator.hotkeyManager.hotkeysRegistered
-                                             ? Color(hue: 0.38, saturation: 0.7, brightness: 0.7)
-                                             : .orange)
+                            .foregroundStyle(coordinator.hotkeyManager.hotkeysRegistered
+                                             ? Color.green : Color.orange)
                     }
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.white.opacity(0.03))
-                            .overlay(RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color(hue: 0.38, saturation: 0.5, brightness: 0.4).opacity(0.3), lineWidth: 1))
-                    )
+                    .padding(.vertical, 7)
+                    .background(CardBackground(corner: 8))
                 }
                 .padding(.horizontal, 8)
                 .padding(.bottom, 8)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.white.opacity(0.04))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(micGranted
-                                ? Color.white.opacity(0.07)
-                                : Color.orange.opacity(0.35),
-                                lineWidth: 1)
-                )
-        )
+        .background(CardBackground())
     }
 }
 
@@ -452,8 +456,7 @@ struct PlaybackControlsView: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            HStack(spacing: 10) {
-                // Play / Pause toggle
+            HStack(spacing: 8) {
                 Button {
                     if player.playbackState == .playing {
                         player.pause()
@@ -463,45 +466,44 @@ struct PlaybackControlsView: View {
                     }
                 } label: {
                     Image(systemName: player.playbackState == .playing ? "pause.fill" : "play.fill")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(width: 26, height: 26)
                 }
-                .buttonStyle(PlaybackButtonStyle())
+                .buttonStyle(CircularIconButtonStyle())
                 .accessibilityLabel(player.playbackState == .playing ? "Pause playback" : "Play last recording")
-                .help(player.playbackState == .playing ? "Pause playback" : "Play the last recorded WAV file")
+                .help(player.playbackState == .playing ? "Pause playback" : "Play the last recorded clip")
                 .disabled(!player.canPlay && player.playbackState == .idle)
                 .onAppear { if !player.canPlay { player.load(url: url) } }
 
-                // Restart
                 Button {
                     if !player.canPlay { player.load(url: url) }
                     player.restart()
                 } label: {
                     Image(systemName: "backward.end.fill")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 26, height: 26)
                 }
-                .buttonStyle(PlaybackButtonStyle())
+                .buttonStyle(CircularIconButtonStyle())
                 .accessibilityLabel("Restart playback")
                 .help("Restart playback from the beginning")
 
-                // Progress text
                 if player.duration > 0 {
                     Text("\(timeString(player.currentTime)) / \(timeString(player.duration))")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.4))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
                 }
 
-                Spacer()
+                Spacer(minLength: 0)
             }
 
-            // Progress bar
             if player.duration > 0 {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule()
-                            .fill(Color.white.opacity(0.1))
+                            .fill(Color(nsColor: .quaternaryLabelColor))
                             .frame(height: 3)
                         Capsule()
-                            .fill(Color(hue: 0.62, saturation: 0.6, brightness: 0.7))
+                            .fill(Color.accentColor)
                             .frame(
                                 width: geo.size.width * CGFloat(player.duration > 0
                                     ? min(player.currentTime / player.duration, 1.0) : 0),
@@ -521,31 +523,71 @@ struct PlaybackControlsView: View {
     }
 }
 
-private struct PlaybackButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundColor(.white.opacity(configuration.isPressed ? 0.5 : 0.75))
-            .frame(width: 28, height: 28)
-            .background(
-                Circle()
-                    .fill(Color.white.opacity(configuration.isPressed ? 0.15 : 0.09))
+// MARK: - Shared chrome
+
+/// Standard card container used across the dashboard.
+///
+/// This is a `View`, not a `ViewModifier`, because call sites use it as
+/// `.background(CardBackground())` — a `ViewModifier` would not be accepted
+/// there.
+struct CardBackground: View {
+    var corner: CGFloat = 10
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: corner, style: .continuous)
+            .fill(Color(nsColor: .controlBackgroundColor))
+            .overlay(
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
             )
     }
 }
 
-// MARK: - Shared Styles
+/// Small uppercase section heading.
+struct SectionLabel: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .textCase(.uppercase)
+            .tracking(0.8)
+    }
+}
 
 struct GhostButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12, weight: .medium))
-            .foregroundColor(.white.opacity(0.7))
+            .foregroundColor(.primary)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 7)
-                    .fill(Color.white.opacity(configuration.isPressed ? 0.15 : 0.08))
+                    .fill(Color(nsColor: configuration.isPressed
+                                 ? NSColor.quaternaryLabelColor
+                                 : NSColor.controlBackgroundColor))
             )
+    }
+}
+
+/// Circular icon button for the transport controls.
+///
+/// `ButtonBorderShape.circle` and `.capsule` are both macOS 14+, and DubScribe
+/// targets macOS 13, so the shape is drawn by hand rather than borrowed.
+struct CircularIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(width: 26, height: 26)
+            .background(
+                Circle().fill(Color(nsColor: configuration.isPressed
+                                    ? NSColor.quaternaryLabelColor
+                                    : NSColor.controlBackgroundColor))
+            )
+            .overlay(Circle().stroke(Color(nsColor: .separatorColor), lineWidth: 1))
+            .contentShape(Circle())
     }
 }
 
@@ -558,36 +600,29 @@ struct PermissionRowView: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 13))
-                .foregroundColor(granted ? Color(hue: 0.38, saturation: 0.7, brightness: 0.7) : .orange)
-                .frame(width: 20)
+                .font(.system(size: 12))
+                .foregroundStyle(granted ? Color.green : Color.orange)
+                .frame(width: 18)
                 .accessibilityHidden(true)
 
             Text(label)
-                .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.7))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
 
             Spacer()
 
             if granted {
                 Text("Granted")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(Color(hue: 0.38, saturation: 0.7, brightness: 0.7))
+                    .foregroundStyle(.secondary)
             } else {
                 Button("Enable") { action() }
-                    .buttonStyle(GhostButtonStyle())
+                    .font(.system(size: 11))
+                    .controlSize(.small)
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.white.opacity(0.03))
-                .overlay(RoundedRectangle(cornerRadius: 8)
-                    .stroke(granted
-                            ? Color(hue: 0.38, saturation: 0.5, brightness: 0.4).opacity(0.3)
-                            : Color.orange.opacity(0.25),
-                            lineWidth: 1))
-        )
+        .padding(.vertical, 7)
+        .background(CardBackground(corner: 8))
     }
 }

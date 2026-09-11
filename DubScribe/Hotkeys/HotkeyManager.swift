@@ -118,13 +118,13 @@ final class HotkeyManager: ObservableObject {
 
     private func registerHotkeys() {
         // Hold hotkey
-        var holdID_ = EventHotKeyID(signature: Self.sig, id: Self.holdID)
+        let holdID_ = EventHotKeyID(signature: Self.sig, id: Self.holdID)
         let s1 = RegisterEventHotKey(
             holdHotkey.keyCode, holdHotkey.modifiers,
             holdID_, GetApplicationEventTarget(), 0, &holdRef
         )
         // Push hotkey
-        var pushID_ = EventHotKeyID(signature: Self.sig, id: Self.pushID)
+        let pushID_ = EventHotKeyID(signature: Self.sig, id: Self.pushID)
         let s2 = RegisterEventHotKey(
             pushHotkey.keyCode, pushHotkey.modifiers,
             pushID_, GetApplicationEventTarget(), 0, &pushRef

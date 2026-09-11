@@ -4,12 +4,10 @@ enum RecordingTrigger: Equatable {
     case manual
     case pushHotkey
     case holdHotkey
-    case voiceActivation
 }
 
 enum RecordingState: Equatable {
     case idle
-    case listeningForVoice          // voice activation mode active, waiting
     case recording(startedAt: Date, trigger: RecordingTrigger)
     case processing
     case copied(URL)
@@ -19,8 +17,6 @@ enum RecordingState: Equatable {
         switch self {
         case .idle:
             return "Ready"
-        case .listeningForVoice:
-            return "Listening for voice…"
         case .recording:
             return "Recording…"
         case .processing:

@@ -20,6 +20,25 @@ struct Hotkey: Codable, Equatable {
     /// Legacy alias kept for AppSettings migration
     static let defaultHotkey = defaultHoldHotkey
 
+    /// Whether this combination is safe to register as a *global* hotkey.
+    ///
+    /// A global hotkey with no strong modifier — a bare "R", say — is swallowed
+    /// system-wide: pressing that key in any app would start a recording and the
+    /// user could no longer type the character. `RegisterEventHotKey` accepts it
+    /// happily, so the guard has to live here.
+    ///
+    /// We require ⌃, ⌥ or ⌘. Shift alone is rejected as far too collision-prone.
+    var isSafeForGlobalRegistration: Bool {
+        modifiers & UInt32(controlKey | optionKey | cmdKey) != 0
+    }
+
+    /// Human-readable reason this combination was rejected, or nil if it is fine.
+    var rejectionReason: String? {
+        isSafeForGlobalRegistration
+            ? nil
+            : "Add ⌃, ⌥ or ⌘ — a shortcut without one would block that key everywhere."
+    }
+
     var displayString: String {
         var parts: [String] = []
         if modifiers & UInt32(controlKey) != 0 { parts.append("⌃") }
@@ -85,6 +104,46 @@ struct Hotkey: Codable, Equatable {
         case kVK_ANSI_7:       return "7"
         case kVK_ANSI_8:       return "8"
         case kVK_ANSI_9:       return "9"
+        // Punctuation. Without these, a perfectly ordinary shortcut like ⌃`
+        // rendered as "⌃Key(50)" in Settings, which looks like a bug in the app.
+        // The unshifted character is used because ⇧ is shown separately.
+        case kVK_ANSI_Grave:        return "`"
+        case kVK_ANSI_Minus:        return "-"
+        case kVK_ANSI_Equal:        return "="
+        case kVK_ANSI_LeftBracket:  return "["
+        case kVK_ANSI_RightBracket: return "]"
+        case kVK_ANSI_Backslash:    return "\\"
+        case kVK_ANSI_Semicolon:    return ";"
+        case kVK_ANSI_Quote:        return "'"
+        case kVK_ANSI_Comma:        return ","
+        case kVK_ANSI_Period:       return "."
+        case kVK_ANSI_Slash:        return "/"
+        case kVK_ANSI_Keypad0:      return "⌧0"
+        case kVK_ANSI_Keypad1:      return "⌧1"
+        case kVK_ANSI_Keypad2:      return "⌧2"
+        case kVK_ANSI_Keypad3:      return "⌧3"
+        case kVK_ANSI_Keypad4:      return "⌧4"
+        case kVK_ANSI_Keypad5:      return "⌧5"
+        case kVK_ANSI_Keypad6:      return "⌧6"
+        case kVK_ANSI_Keypad7:      return "⌧7"
+        case kVK_ANSI_Keypad8:      return "⌧8"
+        case kVK_ANSI_Keypad9:      return "⌧9"
+        case kVK_ANSI_KeypadDecimal:  return "⌧."
+        case kVK_ANSI_KeypadPlus:     return "⌧+"
+        case kVK_ANSI_KeypadMinus:    return "⌧-"
+        case kVK_ANSI_KeypadMultiply: return "⌧*"
+        case kVK_ANSI_KeypadDivide:   return "⌧/"
+        case kVK_ANSI_KeypadEnter:    return "⌧↩"
+        // Navigation
+        case kVK_LeftArrow:    return "←"
+        case kVK_RightArrow:   return "→"
+        case kVK_UpArrow:      return "↑"
+        case kVK_DownArrow:    return "↓"
+        case kVK_Home:         return "↖"
+        case kVK_End:          return "↘"
+        case kVK_PageUp:       return "⇞"
+        case kVK_PageDown:     return "⇟"
+        case kVK_ForwardDelete: return "⌦"
         default:               return "Key(\(kc))"
         }
     }

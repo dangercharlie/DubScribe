@@ -1,5 +1,6 @@
 import SwiftUI
 import Carbon
+import AppKit
 
 struct SettingsView: View {
     @EnvironmentObject var coordinator: AppCoordinator
@@ -7,421 +8,41 @@ struct SettingsView: View {
 
     @State private var isRecordingHold = false
     @State private var isRecordingPush = false
-    @State private var hotkeyConflict: String? = nil
+    @State private var hotkeyWarning: String? = nil
     @State private var availableDevices: [AudioInputDevice] = []
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(hue: 0.62, saturation: 0.85, brightness: 0.12),
-                    Color(hue: 0.68, saturation: 0.90, brightness: 0.08)
-                ],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            Color(nsColor: .windowBackgroundColor).ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Text("Settings")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                    Spacer()
-                    Button { coordinator.applySettings(); dismiss() } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(.white.opacity(0.5))
-                    }
-                    .buttonStyle(.plain)
-                    .keyboardShortcut(.escape, modifiers: [])
-                    .accessibilityLabel("Close settings")
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 24)
-                .padding(.bottom, 16)
+                header
 
-                Divider().background(Color.white.opacity(0.08))
+                Divider()
 
                 ScrollView {
                     VStack(spacing: 16) {
-                        // 1. Recording Shortcuts
-                        settingsSection("Recording Shortcuts") {
-                            VStack(spacing: 12) {
-                                if let conflict = hotkeyConflict {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "exclamationmark.triangle.fill")
-                                            .foregroundColor(.orange)
-                                            .font(.system(size: 12))
-                                        Text(conflict)
-                                            .font(.system(size: 11))
-                                            .foregroundColor(.orange)
-                                    }
-                                    .padding(.horizontal, 4)
-                                }
+                        shortcutsSection
+                        audioInputSection
+                        behaviorSection
 
-                                hotkeyRow(
-                                    label: "Hold to Record",
-                                    description: "Hold to record, release to stop",
-                                    hotkey: coordinator.settings.holdHotkey,
-                                    isRecording: $isRecordingHold,
-                                    onNew: { newKey in
-                                        if newKey == coordinator.settings.pushHotkey {
-                                            hotkeyConflict = "Hold and Push hotkeys must be different."
-                                        } else {
-                                            hotkeyConflict = nil
-                                            coordinator.settings.holdHotkey = newKey
-                                            coordinator.applySettings()
-                                        }
-                                    },
-                                    onReset: { coordinator.resetHoldHotkey() },
-                                    helpText: "Hold this shortcut to record. Release to stop and copy to clipboard."
-                                )
-
-                                Divider().background(Color.white.opacity(0.06))
-
-                                hotkeyRow(
-                                    label: "Push to Record",
-                                    description: "Press once to start, again to stop",
-                                    hotkey: coordinator.settings.pushHotkey,
-                                    isRecording: $isRecordingPush,
-                                    onNew: { newKey in
-                                        if newKey == coordinator.settings.holdHotkey {
-                                            hotkeyConflict = "Push and Hold hotkeys must be different."
-                                        } else {
-                                            hotkeyConflict = nil
-                                            coordinator.settings.pushHotkey = newKey
-                                            coordinator.applySettings()
-                                        }
-                                    },
-                                    onReset: { coordinator.resetPushHotkey() },
-                                    helpText: "Press once to start recording, press again to stop."
-                                )
-                            }
-                        }
-
-                        // 2. Audio Input
-                        settingsSection("Audio Input") {
-                            VStack(spacing: 10) {
-                                HStack {
-                                    Text("Input Source")
-                                        .settingsLabel()
-                                    Spacer()
-                                    Picker("", selection: Binding(
-                                        get: { coordinator.settings.selectedInputDeviceID ?? "system_default" },
-                                        set: { id in
-                                            coordinator.settings.selectedInputDeviceID = id == "system_default" ? nil : id
-                                            coordinator.applySettings()
-                                        }
-                                    )) {
-                                        ForEach(availableDevices) { device in
-                                            Text(device.name).tag(device.id)
-                                        }
-                                    }
-                                    .pickerStyle(.menu)
-                                    .frame(maxWidth: 200)
-                                    .accessibilityLabel("Audio input source")
-                                    .help("Select the microphone or audio input device to use for recordings.")
-                                }
-
-                                Divider().background(Color.white.opacity(0.06))
-
-                                Toggle(isOn: $coordinator.settings.playSounds) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Play sounds on record/stop")
-                                            .settingsLabel()
-                                        Text("Plays a Tink sound when recording starts and stops.")
-                                            .font(.system(size: 10))
-                                            .foregroundColor(.white.opacity(0.35))
-                                    }
-                                }
-                                .toggleStyle(CustomToggleStyle())
-                                .onChange(of: coordinator.settings.playSounds) { _ in coordinator.applySettings() }
-                            }
-                        }
-
-                        // 3. Recording Behavior
-                        settingsSection("Recording Behavior") {
-                            VStack(spacing: 12) {
-                                Toggle(isOn: $coordinator.settings.muteSystemAudioDuringRecording) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Mute System Audio")
-                                            .settingsLabel()
-                                        Text("Automatically mutes output while recording, restores on stop.")
-                                            .font(.system(size: 10))
-                                            .foregroundColor(.white.opacity(0.35))
-                                    }
-                                }
-                                .toggleStyle(CustomToggleStyle())
-                                .onChange(of: coordinator.settings.muteSystemAudioDuringRecording) { _ in
-                                    coordinator.applySettings()
-                                }
-
-                                Divider().background(Color.white.opacity(0.06))
-
-                                Toggle(isOn: $coordinator.settings.pauseMediaDuringRecording) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Pause Media Playback")
-                                            .settingsLabel()
-                                        Text("Pauses Spotify, Music, or system media when recording starts.")
-                                            .font(.system(size: 10))
-                                            .foregroundColor(.white.opacity(0.35))
-                                    }
-                                }
-                                .toggleStyle(CustomToggleStyle())
-                                .onChange(of: coordinator.settings.pauseMediaDuringRecording) { _ in
-                                    coordinator.applySettings()
-                                }
-
-                                if coordinator.settings.pauseMediaDuringRecording {
-                                    Divider().background(Color.white.opacity(0.06))
-
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        HStack {
-                                            Text("Resume Delay")
-                                                .settingsLabel()
-                                            Spacer()
-                                            Text(String(format: "%.1fs", coordinator.settings.mediaResumeDelay))
-                                                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                                .foregroundColor(.white.opacity(0.5))
-                                        }
-                                        Slider(
-                                            value: $coordinator.settings.mediaResumeDelay,
-                                            in: 0.0...1.0,
-                                            step: 0.1
-                                        )
-                                        .accentColor(Color(hue: 0.62, saturation: 0.6, brightness: 0.7))
-                                        .onChange(of: coordinator.settings.mediaResumeDelay) { _ in
-                                            coordinator.applySettings()
-                                        }
-                                        .accessibilityLabel("Media resume delay")
-                                        .accessibilityValue(String(format: "%.1f seconds", coordinator.settings.mediaResumeDelay))
-                                        .help("How long to wait after stopping before resuming media playback.")
-                                        HStack {
-                                            Text("Instant").font(.system(size: 9)).foregroundColor(.white.opacity(0.3))
-                                            Spacer()
-                                            Text("1 second").font(.system(size: 9)).foregroundColor(.white.opacity(0.3))
-                                        }
-                                        Text("Crossover delay before resuming media. Prevents overlap with recording tail.")
-                                            .font(.system(size: 10))
-                                            .foregroundColor(.white.opacity(0.35))
-                                    }
-                                }
-                            }
-                        }
-
-                        // 4. Voice Activation
-                        settingsSection("Voice Activation") {
-                            VStack(spacing: 12) {
-                                Toggle(isOn: $coordinator.settings.voiceActivationEnabled) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Enable Voice Activation")
-                                            .settingsLabel()
-                                        Text("Automatically starts recording when voice is detected.")
-                                            .font(.system(size: 10))
-                                            .foregroundColor(.white.opacity(0.35))
-                                    }
-                                }
-                                .toggleStyle(CustomToggleStyle())
-                                .onChange(of: coordinator.settings.voiceActivationEnabled) { _ in
-                                    coordinator.applySettings()
-                                }
-
-                                if coordinator.settings.voiceActivationEnabled {
-                                    Divider().background(Color.white.opacity(0.06))
-
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        HStack {
-                                            Text("Input Threshold")
-                                                .settingsLabel()
-                                            Spacer()
-                                            Text("\(Int(coordinator.settings.voiceActivationThreshold * 100))%")
-                                                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                                .foregroundColor(.white.opacity(0.5))
-                                        }
-                                        Slider(
-                                            value: $coordinator.settings.voiceActivationThreshold,
-                                            in: 0.005...0.3
-                                        )
-                                        .accentColor(Color(hue: 0.62, saturation: 0.6, brightness: 0.7))
-                                        .onChange(of: coordinator.settings.voiceActivationThreshold) { _ in
-                                            coordinator.applySettings()
-                                        }
-                                        .accessibilityLabel("Voice activation input threshold")
-                                        .accessibilityValue("\(Int(coordinator.settings.voiceActivationThreshold * 100)) percent")
-                                        .help("Raise the threshold to avoid triggering recordings from background noise.")
-                                        HStack {
-                                            Text("Quiet").font(.system(size: 9)).foregroundColor(.white.opacity(0.3))
-                                            Spacer()
-                                            Text("Loud").font(.system(size: 9)).foregroundColor(.white.opacity(0.3))
-                                        }
-                                        Text("Raise the threshold if background noise starts recordings accidentally.")
-                                            .font(.system(size: 10))
-                                            .foregroundColor(.white.opacity(0.35))
-                                    }
-
-                                    Divider().background(Color.white.opacity(0.06))
-
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        HStack {
-                                            Text("Stop Delay")
-                                                .settingsLabel()
-                                            Spacer()
-                                            Text(String(format: "%.1fs", coordinator.settings.voiceActivationStopDelay))
-                                                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                                .foregroundColor(.white.opacity(0.5))
-                                        }
-                                        Slider(
-                                            value: $coordinator.settings.voiceActivationStopDelay,
-                                            in: 0.3...3.0,
-                                            step: 0.1
-                                        )
-                                        .accentColor(Color(hue: 0.62, saturation: 0.6, brightness: 0.7))
-                                        .onChange(of: coordinator.settings.voiceActivationStopDelay) { _ in
-                                            coordinator.applySettings()
-                                        }
-                                        .accessibilityLabel("Voice activation stop delay")
-                                        .accessibilityValue(String(format: "%.1f seconds", coordinator.settings.voiceActivationStopDelay))
-                                        .help("How long to wait in silence before stopping the recording automatically.")
-                                        Text("Delay before stopping after silence. Prevents cutting off between words.")
-                                            .font(.system(size: 10))
-                                            .foregroundColor(.white.opacity(0.35))
-                                    }
-                                }
-                            }
-                        }
-
-                        // 4b. Mic Test
                         MicTestSectionView(
                             micTestManager: coordinator.micTestManager,
-                            threshold: $coordinator.settings.voiceActivationThreshold,
-                            isRealRecordingActive: coordinator.micTestManager.isRealRecordingActive
+                            threshold: $coordinator.settings.micTestThreshold,
+                            inputDeviceName: selectedInputName
                         )
 
-                        // 5. General
-                        settingsSection("General") {
-                            VStack(spacing: 10) {
-                                Toggle(isOn: Binding(
-                                    get: { coordinator.loginItemManager.isEnabled },
-                                    set: { coordinator.loginItemManager.setEnabled($0) }
-                                )) {
-                                    Text("Launch at Login")
-                                        .settingsLabel()
-                                }
-                                .toggleStyle(CustomToggleStyle())
-
-                                Divider().background(Color.white.opacity(0.06))
-
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Clips Folder")
-                                            .settingsLabel()
-                                        Text(FileManagerHelpers.clipsDirectory.path)
-                                            .font(.system(size: 10, design: .monospaced))
-                                            .foregroundColor(.white.opacity(0.28))
-                                            .lineLimit(2)
-                                    }
-                                    Spacer()
-                                    Button("Reveal") { coordinator.revealClipsFolder() }
-                                        .buttonStyle(SettingsGhostButtonStyle())
-                                        .accessibilityLabel("Reveal clips folder in Finder")
-                                        .help("Reveal the DubScribe clips folder in Finder")
-                                }
-                            }
-                        }
-
-                        // 6. Permissions
-                        settingsSection("Permissions") {
-                            VStack(spacing: 10) {
-                                settingsPermissionRow(
-                                    icon: "mic.fill",
-                                    title: "Microphone",
-                                    description: "Required to record audio.",
-                                    granted: PermissionHelpers.isMicrophoneAuthorized,
-                                    action: { PermissionHelpers.openMicrophoneSettings() }
-                                )
-                                settingsPermissionRow(
-                                    icon: "playpause.fill",
-                                    title: "Media Keys",
-                                    description: "Required to pause browser or Now Playing audio.",
-                                    granted: PermissionHelpers.isMediaKeyControlAuthorized,
-                                    action: {
-                                        if !PermissionHelpers.requestMediaKeyControlPermission() {
-                                            PermissionHelpers.openAccessibilitySettings()
-                                        }
-                                    }
-                                )
-                                // Carbon hotkeys don't need Accessibility
-                                HStack(spacing: 12) {
-                                    Image(systemName: "keyboard")
-                                        .font(.system(size: 16))
-                                        .foregroundColor(Color(hue: 0.38, saturation: 0.7, brightness: 0.7))
-                                        .frame(width: 22)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Global Hotkeys")
-                                            .font(.system(size: 13, weight: .medium))
-                                            .foregroundColor(.white.opacity(0.85))
-                                        Text("Uses Carbon RegisterEventHotKey — no Accessibility permission needed.")
-                                            .font(.system(size: 10))
-                                            .foregroundColor(.white.opacity(0.35))
-                                        Text(coordinator.hotkeyManager.hotkeysRegistered
-                                             ? "Hotkeys registered ✓"
-                                             : "Hotkeys not registered — restart app")
-                                            .font(.system(size: 10, weight: .medium))
-                                            .foregroundColor(coordinator.hotkeyManager.hotkeysRegistered
-                                                             ? Color(hue: 0.38, saturation: 0.7, brightness: 0.7)
-                                                             : .orange)
-                                    }
-                                    Spacer()
-                                    Label("Active", systemImage: "checkmark.circle.fill")
-                                        .font(.system(size: 11, weight: .medium))
-                                        .foregroundColor(Color(hue: 0.38, saturation: 0.7, brightness: 0.7))
-                                }
-                            }
-                        }
-
-                        // 7. About
-                        settingsSection("About") {
-                            VStack(spacing: 10) {
-                                HStack(spacing: 16) {
-                                    Image(nsImage: NSImage(named: "AppIcon") ?? NSImage())
-                                        .resizable()
-                                        .frame(width: 48, height: 48)
-                                    
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("DubScribe")
-                                            .font(.system(size: 14, weight: .bold))
-                                            .foregroundColor(.white)
-                                        Text("Version 0.6.4")
-                                            .font(.system(size: 11))
-                                            .foregroundColor(.white.opacity(0.5))
-                                    }
-                                    Spacer()
-                                    Link(destination: URL(string: "https://ko-fi.com/dangercharlie")!) {
-                                        HStack(spacing: 6) {
-                                            Image(systemName: "cup.and.saucer.fill")
-                                            Text("Buy Me A Coffee")
-                                        }
-                                        .font(.system(size: 11, weight: .medium))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 6)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 6)
-                                                .fill(Color(hue: 0.1, saturation: 0.8, brightness: 0.9))
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
+                        storageSection
+                        generalSection
+                        permissionsSection
+                        aboutSection
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 20)
                 }
             }
         }
-        .frame(width: 440, height: 720)
+        .frame(width: 460, height: 740)
         .onAppear {
             availableDevices = AudioInputDevice.availableDevices()
         }
@@ -430,26 +51,472 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Mic Test Section (extracted)
+    // MARK: - Header
 
+    private var header: some View {
+        HStack(spacing: 10) {
+            Image("AppMark")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 20, height: 20)
+                .foregroundStyle(Color.accentColor)
+                .accessibilityHidden(true)
+
+            Text("Settings")
+                .font(.system(size: 15, weight: .semibold))
+
+            Spacer()
+
+            Button {
+                coordinator.applySettings()
+                dismiss()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.tertiary)
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut(.escape, modifiers: [])
+            .accessibilityLabel("Close settings")
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .padding(.bottom, 14)
+    }
+
+    // MARK: - 1. Shortcuts
+
+    private var shortcutsSection: some View {
+        settingsSection("Recording Shortcuts") {
+            VStack(spacing: 12) {
+                if let warning = hotkeyWarning {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 11))
+                        Text(warning)
+                            .font(.system(size: 11))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                    .foregroundStyle(.orange)
+                }
+
+                hotkeyRow(
+                    label: "Hold to Record",
+                    description: "Hold to record, release to stop",
+                    hotkey: coordinator.settings.holdHotkey,
+                    isRecording: $isRecordingHold,
+                    onNew: { newKey in
+                        // A shortcut with no ⌃/⌥/⌘ would be registered globally
+                        // and swallow that key everywhere.
+                        if let reason = newKey.rejectionReason {
+                            hotkeyWarning = reason
+                        } else if newKey == coordinator.settings.pushHotkey {
+                            hotkeyWarning = "Hold and Push shortcuts must be different."
+                        } else {
+                            hotkeyWarning = nil
+                            coordinator.settings.holdHotkey = newKey
+                            coordinator.applySettings()
+                        }
+                    },
+                    onReset: { hotkeyWarning = nil; coordinator.resetHoldHotkey() },
+                    helpText: "Hold this shortcut to record. Release to stop and copy to the clipboard."
+                )
+
+                Divider()
+
+                hotkeyRow(
+                    label: "Push to Record",
+                    description: "Press once to start, again to stop",
+                    hotkey: coordinator.settings.pushHotkey,
+                    isRecording: $isRecordingPush,
+                    onNew: { newKey in
+                        if let reason = newKey.rejectionReason {
+                            hotkeyWarning = reason
+                        } else if newKey == coordinator.settings.holdHotkey {
+                            hotkeyWarning = "Push and Hold shortcuts must be different."
+                        } else {
+                            hotkeyWarning = nil
+                            coordinator.settings.pushHotkey = newKey
+                            coordinator.applySettings()
+                        }
+                    },
+                    onReset: { hotkeyWarning = nil; coordinator.resetPushHotkey() },
+                    helpText: "Press once to start recording, press again to stop."
+                )
+            }
+        }
+    }
+
+    // MARK: - 2. Audio Input
+
+    private var audioInputSection: some View {
+        settingsSection("Audio Input") {
+            VStack(spacing: 10) {
+                HStack {
+                    Text("Input Source").settingsLabel()
+                    Spacer()
+                    Picker("", selection: Binding(
+                        get: { coordinator.settings.selectedInputDeviceID ?? "system_default" },
+                        set: { id in
+                            coordinator.settings.selectedInputDeviceID = id == "system_default" ? nil : id
+                            coordinator.applySettings()
+                        }
+                    )) {
+                        ForEach(availableDevices) { device in
+                            Text(device.name).tag(device.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(maxWidth: 220)
+                    .accessibilityLabel("Audio input source")
+                    .help("Select the microphone or audio input device to use for recordings.")
+                }
+
+                Divider()
+
+                Toggle(isOn: $coordinator.settings.showRecordingHUD) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Show level indicator while recording").settingsLabel()
+                        Text("A small floating indicator at the top of the screen, showing the destination app, the live input level and elapsed time.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .toggleStyle(.switch)
+                .onChange(of: coordinator.settings.showRecordingHUD) { _ in coordinator.applySettings() }
+
+                if coordinator.settings.showRecordingHUD {
+                    HStack(spacing: 8) {
+                        Text("Opacity")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                        Slider(value: $coordinator.settings.hudOpacity,
+                               in: 0.0...1.0) { editing in
+                            // Save once, when the drag ends — but preview live.
+                            if !editing { coordinator.applySettings() }
+                        }
+                        .frame(maxWidth: 150)
+                        Text("\(Int(coordinator.settings.hudOpacity * 100))%")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 40, alignment: .trailing)
+                    }
+                    .padding(.leading, 2)
+                    .onChange(of: coordinator.settings.hudOpacity) { _ in
+                        coordinator.updateHUDAppearance()
+                    }
+                    .help("How strongly the indicator is frosted. At 100% it is the lightest frost it has ever been — this used to be the most transparent setting — and turning it down fades the frost itself, so the desktop shows through more. The level dots and timer stay fully opaque.")
+                }
+
+                Toggle(isOn: $coordinator.settings.playSounds) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Play a sound when recording stops").settingsLabel()
+                        Text("Confirms the clip is saved and copied.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .toggleStyle(.switch)
+                .onChange(of: coordinator.settings.playSounds) { _ in coordinator.applySettings() }
+
+                Toggle(isOn: $coordinator.settings.playStartCue) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Play a sound when recording starts").settingsLabel()
+                        Text("Off by default. Useful if you cannot see the level indicator — but note capture begins only after the cue finishes, so the cue is never recorded.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .toggleStyle(.switch)
+                .onChange(of: coordinator.settings.playStartCue) { _ in coordinator.applySettings() }
+            }
+        }
+    }
+
+    // MARK: - 3. Recording Behavior
+
+    private var behaviorSection: some View {
+        settingsSection("Recording Behavior") {
+            VStack(spacing: 12) {
+                Toggle(isOn: $coordinator.settings.muteSystemAudioDuringRecording) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Mute system audio while recording").settingsLabel()
+                        Text("Mutes output on start and restores it on stop.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .toggleStyle(.switch)
+                .onChange(of: coordinator.settings.muteSystemAudioDuringRecording) { _ in
+                    coordinator.applySettings()
+                }
+
+                Divider()
+
+                Toggle(isOn: $coordinator.settings.pauseMediaDuringRecording) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Pause media playback while recording").settingsLabel()
+                        Text("Pauses Spotify, Music, VLC or browser media, then resumes it.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .toggleStyle(.switch)
+                .onChange(of: coordinator.settings.pauseMediaDuringRecording) { _ in
+                    coordinator.applySettings()
+                }
+
+                if coordinator.settings.pauseMediaDuringRecording {
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Resume delay").settingsLabel()
+                            Spacer()
+                            Text(String(format: "%.1fs", coordinator.settings.mediaResumeDelay))
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: $coordinator.settings.mediaResumeDelay, in: 0.0...1.0, step: 0.1)
+                            .onChange(of: coordinator.settings.mediaResumeDelay) { _ in
+                                coordinator.applySettings()
+                            }
+                            .accessibilityLabel("Media resume delay")
+                            .accessibilityValue(String(format: "%.1f seconds", coordinator.settings.mediaResumeDelay))
+                            .help("How long to wait after stopping before resuming media playback.")
+                        Text("Crossover delay before resuming, so the tail of the recording is not overlapped.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - 5. Storage / self-delete
+
+    private var storageSection: some View {
+        settingsSection("Clip Storage") {
+            VStack(spacing: 12) {
+                Toggle(isOn: $coordinator.settings.autoDeleteClips) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Automatically delete clips").settingsLabel()
+                        Text("Moves a clip to the Trash once it is no longer pasteable.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .toggleStyle(.switch)
+                .onChange(of: coordinator.settings.autoDeleteClips) { _ in
+                    coordinator.applySettings()
+                    coordinator.clipStore.sweep()
+                }
+
+                if coordinator.settings.autoDeleteClips {
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Keep for").settingsLabel()
+                            Spacer()
+                            Text(retentionLabel)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: $coordinator.settings.clipRetentionMinutes, in: 0.5...30, step: 0.5)
+                            .onChange(of: coordinator.settings.clipRetentionMinutes) { _ in
+                                coordinator.applySettings()
+                            }
+                            .accessibilityLabel("Clip retention time")
+                            .accessibilityValue(retentionLabel)
+                            .help("How long a clip stays on disk after it leaves the clipboard.")
+                        Text("A clip on the clipboard is never deleted, however old it is.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    }
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Limit folder size").settingsLabel()
+                            Spacer()
+                            Text("\(Int(coordinator.settings.maxClipsSizeMB)) MB")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: $coordinator.settings.maxClipsSizeMB, in: 50...2000, step: 50)
+                            .onChange(of: coordinator.settings.maxClipsSizeMB) { _ in
+                                coordinator.applySettings()
+                                coordinator.clipStore.sweep()
+                            }
+                            .accessibilityLabel("Clips folder size limit")
+                            .accessibilityValue("\(Int(coordinator.settings.maxClipsSizeMB)) megabytes")
+                            .help("Upper bound on the clips folder. Oldest unprotected clips are removed first.")
+                    }
+                }
+
+                Divider()
+
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Clips folder").settingsLabel()
+                        Text(FileManagerHelpers.clipsDirectory.path)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(2)
+                            .truncationMode(.middle)
+                        Text("\(coordinator.clipStore.clipCount) clip\(coordinator.clipStore.clipCount == 1 ? "" : "s") · \(formattedBytes(coordinator.clipStore.totalBytes))")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Reveal") { coordinator.revealClipsFolder() }
+                        .controlSize(.small)
+                        .accessibilityLabel("Reveal clips folder in Finder")
+                        .help("Reveal the DubScribe clips folder in Finder")
+                }
+            }
+        }
+    }
+
+    /// Human-readable name of the input the mic test will actually use.
+    private var selectedInputName: String {
+        let id = coordinator.settings.selectedInputDeviceID ?? "system_default"
+        return availableDevices.first { $0.id == id }?.name ?? "System Default"
+    }
+
+    private var retentionLabel: String {        let m = coordinator.settings.clipRetentionMinutes
+        return m < 1
+            ? String(format: "%.0f seconds", m * 60)
+            : (m == floor(m) ? "\(Int(m)) minutes" : String(format: "%.1f minutes", m))
+    }
+
+    private func formattedBytes(_ bytes: Int64) -> String {
+        let mb = Double(bytes) / (1024 * 1024)
+        if mb < 1 { return String(format: "%.0f KB", Double(bytes) / 1024) }
+        if mb < 1024 { return String(format: "%.1f MB", mb) }
+        return String(format: "%.2f GB", mb / 1024)
+    }
+
+    // MARK: - 6. General
+
+    private var generalSection: some View {
+        settingsSection("General") {
+            Toggle(isOn: Binding(
+                get: { coordinator.loginItemManager.isEnabled },
+                set: { coordinator.loginItemManager.setEnabled($0) }
+            )) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Launch at login").settingsLabel()
+                    Text("Start DubScribe automatically so the shortcut is always available.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .toggleStyle(.switch)
+        }
+    }
+
+    // MARK: - 7. Permissions
+
+    private var permissionsSection: some View {
+        settingsSection("Permissions") {
+            VStack(spacing: 10) {
+                settingsPermissionRow(
+                    icon: "mic",
+                    title: "Microphone",
+                    description: "Required to record audio.",
+                    granted: PermissionHelpers.isMicrophoneAuthorized,
+                    action: { PermissionHelpers.openMicrophoneSettings() }
+                )
+                settingsPermissionRow(
+                    icon: "playpause",
+                    title: "Media Keys",
+                    description: "Only needed to pause browser or Now Playing audio.",
+                    granted: PermissionHelpers.isMediaKeyControlAuthorized,
+                    action: {
+                        if !PermissionHelpers.requestMediaKeyControlPermission() {
+                            PermissionHelpers.openAccessibilitySettings()
+                        }
+                    }
+                )
+
+                HStack(spacing: 12) {
+                    Image(systemName: "keyboard")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 20)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Global Shortcuts")
+                            .font(.system(size: 12, weight: .medium))
+                        Text("Carbon hotkeys — no Accessibility permission needed.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                        Text(coordinator.hotkeyManager.hotkeysRegistered
+                             ? "Registered"
+                             : "Not registered — try restarting DubScribe")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(coordinator.hotkeyManager.hotkeysRegistered ? Color.green : Color.orange)
+                    }
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    // MARK: - 8. About
+
+    private var aboutSection: some View {
+        settingsSection("About") {
+            HStack(spacing: 14) {
+                // The bundle's app icon — an .appiconset is not reliably
+                // reachable through NSImage(named:).
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .frame(width: 44, height: 44)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("DubScribe")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(appVersionString)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Link(destination: URL(string: "https://ko-fi.com/dangercharlie")!) {
+                    Label("Buy Me a Coffee", systemImage: "cup.and.saucer.fill")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+    }
+
+    /// Read from the bundle rather than hardcoding, so it can never drift from
+    /// the actual build again.
+    private var appVersionString: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+        return "Version \(version) (build \(build))"
+    }
 
     // MARK: - Section Builder
 
     private func settingsSection<C: View>(_ title: String, @ViewBuilder content: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.system(size: 10, weight: .bold))
-                .foregroundColor(.white.opacity(0.4))
-                .textCase(.uppercase)
-                .tracking(1.2)
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(title)
             content()
                 .padding(14)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.05))
-                        .overlay(RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 1))
-                )
+                .background(CardBackground(corner: 12))
         }
     }
 
@@ -466,11 +533,11 @@ struct SettingsView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 1) {
                     Text(label).settingsLabel()
                     Text(description)
                         .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.35))
+                        .foregroundStyle(.tertiary)
                 }
                 Spacer()
                 HotkeyField(hotkey: hotkey, isRecording: isRecording, onNewHotkey: onNew)
@@ -479,7 +546,7 @@ struct SettingsView: View {
             HStack {
                 Spacer()
                 Button("Reset") { onReset() }
-                    .buttonStyle(SettingsGhostButtonStyle())
+                    .controlSize(.small)
             }
         }
     }
@@ -492,26 +559,25 @@ struct SettingsView: View {
     ) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 16))
-                .foregroundColor(granted ? Color(hue: 0.38, saturation: 0.7, brightness: 0.7) : .orange)
-                .frame(width: 22)
+                .font(.system(size: 14))
+                .foregroundStyle(granted ? Color.green : Color.orange)
+                .frame(width: 20)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white.opacity(0.85))
+                    .font(.system(size: 12, weight: .medium))
                 Text(description)
                     .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.35))
+                    .foregroundStyle(.tertiary)
             }
             Spacer()
             if granted {
                 Label("Granted", systemImage: "checkmark.circle.fill")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(Color(hue: 0.38, saturation: 0.7, brightness: 0.7))
+                    .foregroundStyle(.green)
             } else {
-                Button("Enable →") { action() }
-                    .buttonStyle(SettingsGhostButtonStyle())
+                Button("Enable") { action() }
+                    .controlSize(.small)
             }
         }
     }
@@ -531,20 +597,25 @@ struct HotkeyField: View {
             if isRecording { stopCapture() } else { startCapture() }
         } label: {
             Text(isRecording ? "Press keys…" : hotkey.displayString)
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                .foregroundColor(isRecording ? .orange : .white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
+                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .foregroundStyle(isRecording ? Color.orange : Color.primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .frame(minWidth: 96)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(isRecording ? Color.orange.opacity(0.15) : Color.white.opacity(0.10))
-                        .overlay(RoundedRectangle(cornerRadius: 8)
-                            .stroke(isRecording ? Color.orange.opacity(0.5) : Color.white.opacity(0.15),
-                                    lineWidth: 1))
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(Color(nsColor: .textBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .stroke(isRecording ? Color.orange : Color(nsColor: .separatorColor),
+                                lineWidth: isRecording ? 1.5 : 1)
                 )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(isRecording ? "Recording new hotkey, press keys" : "Hotkey: \(hotkey.displayString). Click to change.")
+        .accessibilityLabel(isRecording
+                            ? "Recording new shortcut, press keys"
+                            : "Shortcut: \(hotkey.displayString). Click to change.")
         .onDisappear { stopCapture() }
     }
 
@@ -559,6 +630,8 @@ struct HotkeyField: View {
             if event.modifierFlags.contains(.command) { mods |= UInt32(cmdKey)     }
             let newHotkey = Hotkey(keyCode: UInt32(event.keyCode), modifiers: mods)
             stopCapture()
+            // Validation lives in Hotkey.rejectionReason, surfaced by the caller
+            // as a warning rather than silently arming a dangerous shortcut.
             onNewHotkey(newHotkey)
             return nil
         }
@@ -570,115 +643,57 @@ struct HotkeyField: View {
     }
 }
 
-// MARK: - Styles
-
-struct SettingsGhostButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12, weight: .medium))
-            .foregroundColor(.white.opacity(0.7))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(Color.white.opacity(configuration.isPressed ? 0.15 : 0.08))
-            )
-    }
-}
-
-struct CustomToggleStyle: ToggleStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack {
-            configuration.label
-            Spacer()
-            ZStack {
-                Capsule()
-                    .fill(configuration.isOn
-                          ? Color(hue: 0.62, saturation: 0.7, brightness: 0.7)
-                          : Color.white.opacity(0.15))
-                    .frame(width: 44, height: 26)
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: 20, height: 20)
-                    .offset(x: configuration.isOn ? 9 : -9)
-                    .shadow(color: .black.opacity(0.25), radius: 3)
-            }
-            .animation(.easeInOut(duration: 0.2), value: configuration.isOn)
-            .onTapGesture { configuration.isOn.toggle() }
-        }
-    }
-}
-
-private extension Text {
-    func settingsLabel() -> some View {
-        self
-            .font(.system(size: 13, weight: .medium))
-            .foregroundColor(.white.opacity(0.8))
-    }
-}
+// MARK: - Mic Test
 
 struct MicTestSectionView: View {
     @ObservedObject var micTestManager: MicTestManager
     @Binding var threshold: Float
-    let isRealRecordingActive: Bool
+    let inputDeviceName: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Microphone Test")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundColor(.white.opacity(0.4))
-                .textCase(.uppercase)
-                .tracking(1.2)
-            
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel("Microphone Test")
+
             VStack(spacing: 12) {
-                // Status row
-                HStack {
+                HStack(spacing: 8) {
                     Image(systemName: micTestStatusIcon)
-                        .font(.system(size: 14))
-                        .foregroundColor(micTestStatusColor)
+                        .font(.system(size: 13))
+                        .foregroundStyle(micTestStatusColor)
                     Text(micTestStatusText)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundStyle(.secondary)
                     Spacer()
                 }
 
-                // Level meter
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(Color.white.opacity(0.1)).frame(height: 8)
-                        // Level bar
+                        Capsule().fill(Color(nsColor: .quaternaryLabelColor)).frame(height: 8)
                         Capsule()
-                            .fill(micTestManager.crossesThreshold
-                                  ? Color(hue: 0.33, saturation: 0.8, brightness: 0.7)
-                                  : Color(hue: 0.62, saturation: 0.6, brightness: 0.7))
-                            .frame(
-                                width: geo.size.width * CGFloat(micTestManager.inputLevel),
-                                height: 8
-                            )
+                            .fill(micTestManager.crossesThreshold ? Color.green : Color.accentColor)
+                            .frame(width: geo.size.width * CGFloat(min(max(micTestManager.inputLevel, 0), 1)),
+                                   height: 8)
                             .animation(.linear(duration: 0.05), value: micTestManager.inputLevel)
-                        // Threshold marker
-                        let threshX = geo.size.width * CGFloat(threshold)
+
+                        // Level guide
                         Rectangle()
                             .fill(Color.orange.opacity(0.8))
                             .frame(width: 2, height: 12)
-                            .offset(x: threshX - 1, y: -2)
+                            .offset(x: geo.size.width * CGFloat(min(max(threshold, 0), 1)) - 1)
                     }
                 }
                 .frame(height: 12)
 
-                HStack {
+                HStack(spacing: 8) {
                     Text(String(format: "%.0f%%", micTestManager.inputLevel * 100))
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.4))
-                    Text("| threshold \(Int(threshold * 100))%")
+                        .foregroundStyle(.secondary)
+                    Text("· guide \(Int(threshold * 100))%")
                         .font(.system(size: 10))
-                        .foregroundColor(.orange.opacity(0.6))
+                        .foregroundStyle(.tertiary)
                     Spacer()
                 }
 
-                // Control buttons
                 HStack(spacing: 8) {
-                    // Monitor toggle
                     Button(micTestManager.state == .idle ? "Start Monitor" : "Stop Monitor") {
                         if micTestManager.state == .idle {
                             micTestManager.startMonitor()
@@ -686,40 +701,48 @@ struct MicTestSectionView: View {
                             micTestManager.stopMonitor()
                         }
                     }
-                    .buttonStyle(SettingsGhostButtonStyle())
-                    .disabled(isRealRecordingActive)
+                    .controlSize(.small)
 
-                    // Record test clip
                     if micTestManager.state == .monitoring {
-                        Button("Record Test Clip") {
-                            micTestManager.startTestRecording()
-                        }
-                        .buttonStyle(SettingsGhostButtonStyle())
+                        Button("Record Test Clip") { micTestManager.startTestRecording() }
+                            .controlSize(.small)
                     } else if micTestManager.state == .recordingTest {
-                        Button("Stop") {
-                            micTestManager.stopTestRecording()
-                        }
-                        .buttonStyle(SettingsGhostButtonStyle())
+                        Button("Stop") { micTestManager.stopTestRecording() }
+                            .controlSize(.small)
                     } else if micTestManager.state == .testDone || micTestManager.state == .playingTest {
                         Button(micTestManager.state == .playingTest ? "Playing…" : "Play Test Clip") {
                             micTestManager.playTestClip()
                         }
-                        .buttonStyle(SettingsGhostButtonStyle())
+                        .controlSize(.small)
                         .disabled(micTestManager.state == .playingTest)
                     }
+
+                    Spacer()
                 }
 
-                Text("Test clips are not copied to clipboard.")
-                    .font(.system(size: 9))
-                    .foregroundColor(.white.opacity(0.25))
+                Text("Test clips stay in the system temp folder and are never copied to your clipboard.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Testing: \(inputDeviceName)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    // Worth stating plainly: users reported this as the app
+                    // "hijacking" their Bluetooth audio, when it is really macOS
+                    // switching the headset to narrowband call mode for as long as
+                    // a capture stream is open.
+                    Text("While monitoring, macOS switches a Bluetooth headset into its low-quality call mode. It returns to normal when you stop, and DubScribe never holds the microphone open on its own.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.white.opacity(0.05))
-                    .overlay(RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1))
-            )
+            .background(CardBackground(corner: 12))
         }
     }
 
@@ -732,24 +755,34 @@ struct MicTestSectionView: View {
         case .testDone:      return "checkmark.circle"
         }
     }
+
     private var micTestStatusColor: Color {
         switch micTestManager.state {
         case .idle:          return .secondary
-        case .monitoring:    return micTestManager.crossesThreshold
-                                   ? Color(hue: 0.33, saturation: 0.8, brightness: 0.7)
-                                   : Color(hue: 0.62, saturation: 0.6, brightness: 0.7)
+        case .monitoring:    return micTestManager.crossesThreshold ? .green : .accentColor
         case .recordingTest: return .red
-        case .playingTest:   return Color(hue: 0.62, saturation: 0.6, brightness: 0.7)
-        case .testDone:      return Color(hue: 0.38, saturation: 0.7, brightness: 0.7)
+        case .playingTest:   return .accentColor
+        case .testDone:      return .green
         }
     }
+
     private var micTestStatusText: String {
         switch micTestManager.state {
-        case .idle:          return "Tap 'Start Monitor' to check mic input"
+        case .idle:          return "Start monitoring to check your input level"
         case .monitoring:    return micTestManager.crossesThreshold ? "Voice detected" : "Listening…"
         case .recordingTest: return "Recording test clip…"
         case .playingTest:   return "Playing back test clip…"
-        case .testDone:      return "Test clip ready — tap Play to listen"
+        case .testDone:      return "Test clip ready — press Play to listen"
         }
+    }
+}
+
+// MARK: - Styles
+
+private extension Text {
+    func settingsLabel() -> some View {
+        self
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(.primary)
     }
 }

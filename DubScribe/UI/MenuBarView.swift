@@ -4,10 +4,12 @@ struct MenuBarView: View {
     @EnvironmentObject var coordinator: AppCoordinator
     @Environment(\.openWindow) private var openWindow
 
+    private var state: RecordingState { coordinator.recordingState }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Label {
-                Text(coordinator.recordingState.displayText)
+                Text(state.displayText)
                     .font(.system(size: 13, weight: .semibold))
             } icon: {
                 Image(systemName: statusIcon)
@@ -19,15 +21,15 @@ struct MenuBarView: View {
             Divider()
 
             Button {
-                if coordinator.recordingState.isRecording {
+                if state.isRecording {
                     coordinator.stopRecording()
                 } else {
                     coordinator.startRecording(trigger: .manual)
                 }
             } label: {
                 Label(
-                    coordinator.recordingState.isRecording ? "Stop Recording" : "Start Recording",
-                    systemImage: coordinator.recordingState.isRecording ? "stop.circle" : "record.circle"
+                    state.isRecording ? "Stop & Copy" : "Start Recording",
+                    systemImage: state.isRecording ? "stop.circle" : "record.circle"
                 )
             }
 
@@ -37,10 +39,18 @@ struct MenuBarView: View {
                 Button { coordinator.revealLastClip() } label: {
                     Label("Reveal Last Clip", systemImage: "waveform")
                 }
+
+                // Rescues the "I pasted into the wrong window" case without
+                // making the user record the same thing twice.
+                Button { coordinator.copyLastClipAgain() } label: {
+                    Label("Copy Last Clip Again", systemImage: "doc.on.doc")
+                }
+
                 Text(url.lastPathComponent)
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 12)
+
                 Divider()
             }
 
@@ -53,19 +63,24 @@ struct MenuBarView: View {
                 coordinator.revealClipsFolder()
             }
 
+            Button("Settings…") {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "main")
+                coordinator.isSettingsOpen = true
+            }
+
             Divider()
 
             Button("Quit DubScribe") {
                 NSApp.terminate(nil)
             }
         }
-        .frame(minWidth: 230)
+        .frame(minWidth: 240)
     }
 
     private var statusIcon: String {
-        switch coordinator.recordingState {
-        case .idle:              return "mic.slash"
-        case .listeningForVoice: return "ear"
+        switch state {
+        case .idle:              return "mic"
         case .recording:         return "mic.fill"
         case .processing:        return "waveform"
         case .copied:            return "checkmark.circle"
@@ -74,10 +89,9 @@ struct MenuBarView: View {
     }
 
     private var statusColor: Color {
-        switch coordinator.recordingState {
+        switch state {
         case .recording:         return .red
         case .copied:            return .green
-        case .listeningForVoice: return Color(hue: 0.62, saturation: 0.6, brightness: 0.7)
         case .failed:            return .orange
         default:                 return .secondary
         }

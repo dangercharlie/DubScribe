@@ -212,7 +212,7 @@ actor SystemMediaController {
 
     private func setVolume(device: AudioObjectID, volume: Float) {
         var vol = volume
-        var size = UInt32(MemoryLayout<Float32>.size)
+        let size = UInt32(MemoryLayout<Float32>.size)
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
             mScope: kAudioDevicePropertyScopeOutput,
@@ -224,7 +224,7 @@ actor SystemMediaController {
 
     private func setMute(device: AudioObjectID, muted: Bool) {
         var mute: UInt32 = muted ? 1 : 0
-        var size = UInt32(MemoryLayout<UInt32>.size)
+        let size = UInt32(MemoryLayout<UInt32>.size)
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyMute,
             mScope: kAudioDevicePropertyScopeOutput,

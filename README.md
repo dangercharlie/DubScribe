@@ -65,11 +65,11 @@ DubScribe is not trying to replace platform accessibility tools. It is a focused
 - Global hotkey recording
 - Push-to-record and hold-to-record workflows
 - Menu bar utility design
-- Last recording preview/playback
+- Last recording preview/playback, plus one-click **Copy Again**
 - Input source selection
-- Voice activation support
 - Mic test / input feedback
 - Optional media pause/resume while recording
+- **Self-deleting clips** — each clip moves to the Trash once it is no longer pasteable
 - Launch at login
 - Local-only: no cloud, telemetry, AI, or transcription
 
@@ -130,11 +130,28 @@ Release the shortcut to stop recording and copy the WAV to the clipboard.
 Press the configured shortcut once to start recording.  
 Press it again to stop recording and copy the WAV to the clipboard.
 
-### Voice Activation
+---
 
-DubScribe can listen for input above a configurable threshold and automatically record when speech is detected.
+## Clip Lifecycle
 
-The threshold slider helps avoid accidental recordings from background noise.
+DubScribe is built to get audio *onto your clipboard*, not to build a media library.
+Clips are therefore temporary by default.
+
+After a recording finishes, the WAV is copied to the clipboard and stays on disk for
+as long as it is useful:
+
+- It is **never deleted while it is on the clipboard**, however old it is.
+- Once the clipboard moves on, a **retention timer** starts (2 minutes by default).
+- When the timer expires, the clip — and only that clip — is **moved to the Trash**,
+  so it stays recoverable and *Put Back* keeps working.
+- A **folder size limit** (250 MB by default) acts as a backstop for clips that are
+  never displaced from the clipboard.
+
+Both the retention time and the size limit are configurable in Settings, and the whole
+behaviour can be switched off if you would rather keep every clip.
+
+Test clips recorded from the Microphone Test panel are written to the system temp
+folder, are never copied to the clipboard, and are cleaned up when the panel closes.
 
 ---
 
@@ -162,9 +179,17 @@ DubScribe is intentionally small and specific.
 DubScribe is a local-only utility designed for transparency.
 
 - **Offline:** no cloud sync, APIs, or network services are used by the app.
-- **Local storage:** recordings are written to your local app container (`~/Library/Containers/`).
+- **Local storage:** recordings are written to
+  `~/Library/Application Support/DubScribe/Clips/`. Clips recorded by versions before
+  0.7.0 lived in `~/Music/DubScribe/Clips/` and are moved across automatically on
+  first launch.
+- **Microphone is not held open:** the input device is active only while you are
+  actually recording or while the Microphone Test panel is monitoring. There is no
+  background listening and no standing microphone indicator.
 - **Hotkeys:** uses Carbon APIs (`RegisterEventHotKey`) for the shortcuts you configure.
-- **No transcription:** voice activation measures microphone volume; it does not convert speech to text.
+  No Accessibility permission is required.
+- **Deletion:** expired clips are moved to the Trash through the standard macOS API, so
+  they remain recoverable until you empty it.
 - **No telemetry:** no crash reporters, product analytics, or usage tracking.
 - **No keylogging:** DubScribe only responds to its configured recording shortcuts.
 

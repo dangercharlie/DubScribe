@@ -62,6 +62,9 @@ final class MicTestManager: ObservableObject {
         // Stop level monitor (engine will be replaced by recording engine)
         audioRecorder?.stopLevelMonitoring()
 
+        // Discard any previous test clip before making a new one.
+        discardTestClip()
+
         // Save to a temp location (not the clips folder)
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("dubscribe_test_\(Int(Date().timeIntervalSince1970)).wav")
@@ -85,8 +88,20 @@ final class MicTestManager: ObservableObject {
         recordingTimer?.invalidate()
         recordingTimer = nil
         stopPrivateRecording()
-        state = testClipURL != nil ? .testDone : .idle
         stopLevelTimer()
+
+        // Only claim the clip is ready if the engine actually produced audio.
+        // Previously this checked `testClipURL != nil`, which was true even when
+        // the private engine had failed to start — so "Play Test Clip" appeared,
+        // and then played nothing.
+        if let url = testClipURL, fileSize(url) > 4096 {
+            state = .testDone
+        } else {
+            discardTestClip()
+            state = .idle
+            print("[DubScribe.MicTest] Test clip was empty — discarded")
+        }
+
         // Restart level monitor
         audioRecorder?.startLevelMonitoring()
         startLevelTimer()
@@ -117,12 +132,31 @@ final class MicTestManager: ObservableObject {
         audioPlayer?.stop()
         audioPlayer = nil
         stopPrivateRecording()
+        discardTestClip()
         audioRecorder?.stopLevelMonitoring()
         stopLevelTimer()
         recordingTimer?.invalidate()
         recordingTimer = nil
         state = .idle
         inputLevel = 0
+    }
+
+    // MARK: - Test clip housekeeping
+
+    /// Remove the temporary test clip.
+    ///
+    /// Test recordings live in the system temp directory and are never put on
+    /// the clipboard, so they are pure scratch — but they were previously never
+    /// deleted, so every mic test leaked a WAV for the life of the machine.
+    private func discardTestClip() {
+        if let url = testClipURL {
+            try? FileManager.default.removeItem(at: url)
+        }
+        testClipURL = nil
+    }
+
+    private func fileSize(_ url: URL) -> Int {
+        (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
     }
 
     // MARK: - Private Engine for Test Recording
