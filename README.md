@@ -14,9 +14,9 @@ Hold a key, say the thing, release. The clip lands on your clipboard as a WAV,
 ready to paste — no editor, no library, no save dialog, no file hunting.
 
 <p align="center">
-  <img src="screenshots/menu_bar.png" width="300" alt="The DubScribe menu: recording status, Start Recording, and quick access to the last clip, Settings and the clips folder." />
-  &nbsp;&nbsp;&nbsp;
   <img src="screenshots/settings_window.png" width="350" alt="DubScribe settings, on the Recording tab: shortcuts, microphone and sounds, with an Advanced section holding media handling and the level indicator." />
+
+
 </p>
 
 ---
