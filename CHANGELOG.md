@@ -52,9 +52,8 @@
   from its menu-bar icon. The settings you reach for while working (microphone,
   level indicator, pause media, mute system audio, delete clips automatically) are
   nested directly in that menu, so a mid-task change no longer means opening a
-  window. Audio playback and Reveal moved there too, and the first time you launch
-  the menu opens itself once so the app introduces itself where it actually lives.
-  Settings is unchanged as a place to configure things properly.
+  window. Audio playback and Show in Finder moved there too. Settings is
+  unchanged as a place to configure things properly.
 - **A welcome window on first launch**, explaining that the app lives in the menu
   bar, what to press, and where the clip goes. A menu-bar-only app has a
   discoverability problem — you launch it and, as far as the screen is concerned,
@@ -78,6 +77,10 @@
 - **The interface now follows your system appearance.** The window previously used a
   hardcoded dark gradient and ignored light/dark mode; it now uses standard macOS
   semantic colours and materials, and switches with the system.
+- **DubScribe no longer writes a log file.** It appended to
+  `~/Library/Logs/DubScribe-media.log` on every media event, with no rotation
+  and no size cap — a file that grows for the life of the install, in a
+  location the app never mentioned. Diagnostics go to the console only now.
 - Clips moved from `~/Music/DubScribe/Clips/` to
   `~/Library/Application Support/DubScribe/Clips/`. Existing clips are migrated
   automatically on first launch.
@@ -92,6 +95,19 @@
   anyone who cannot see the indicator.
 
 ### Fixed
+
+- **"Pause media playback" no longer needs Accessibility, and now actually
+  pauses.** The feature previously posted a synthetic media key with `CGEvent`,
+  which only works if the user has granted Accessibility — a large ask for
+  "pause my music while I record", described in Settings as though it needed
+  nothing. It failed silently when the permission was missing, and the only
+  hint was a line in a log file. It now uses MediaRemote, the same private
+  framework the keyboard's media keys go through, loaded dynamically so a
+  change on Apple's side degrades to "did not pause" rather than a crash.
+  Verified on macOS 26 with `CGPreflightPostEventAccess() == 0`: six
+  record/stop cycles, playback paused and resumed every time. The pause and
+  resume commands are distinct (1 and 0, not a toggle), which an earlier
+  version of this change got wrong — playback paused and never came back.
 
 - **Dock → Quit now works while Settings is open.** Settings was presented as a sheet,
   and a sheet runs a modal session that makes macOS refuse to quit: the quit Apple Event

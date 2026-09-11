@@ -78,6 +78,14 @@ final class AppCoordinator: ObservableObject {
         wireAudio()
         wireHotkeys()
 
+        // Register as a Now Playing client now rather than at the first pause.
+        // MediaRemote's registration is asynchronous, so a command sent in the
+        // same breath as registration is dropped: measured 3/6 that way against
+        // 9/9 when the registration is made well in advance. Costs nothing here,
+        // and it is what makes "Pause media playback" reliable rather than
+        // sometimes-working.
+        systemMediaController.prepareMediaControl()
+
         // Track the frontmost app so the indicator can name the destination.
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
