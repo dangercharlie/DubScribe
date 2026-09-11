@@ -67,11 +67,7 @@ final class LaunchPresenter: NSObject, NSApplicationDelegate {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.isReleasedWhenClosed = false
-        let settings = AppSettings.load()
-        window.contentView = NSHostingView(rootView: WelcomeView(
-            holdHotkey: settings.holdHotkey,
-            pushHotkey: settings.pushHotkey
-        ) { [weak self] in
+        window.contentView = NSHostingView(rootView: WelcomeView { [weak self] in
             self?.welcomeWindow?.close()
             self?.welcomeWindow = nil
             // Meeting the app is not the same as being told what changed, so the
