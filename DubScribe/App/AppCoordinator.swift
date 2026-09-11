@@ -24,6 +24,15 @@ final class AppCoordinator: ObservableObject {
     lazy var micTestManager = MicTestManager(audioRecorder: audioRecorder)
     lazy var recordingHUD = RecordingHUDController(recorder: audioRecorder)
 
+    /// A second indicator used only to preview its appearance from Settings.
+    ///
+    /// Kept separate from the live one so that adjusting opacity in the middle of a
+    /// recording can never disturb what is actually on screen.
+    lazy var settingsPreviewHUD = RecordingHUDController(recorder: audioRecorder)
+
+    /// Takes the preview back down a moment after the slider stops moving.
+    private var previewDismissTask: Task<Void, Never>?
+
     /// Hard ceiling on a single recording. Hold-to-record plus a stuck key
     /// would otherwise fill the disk. Generous enough to never interrupt a
     /// real voice note.
@@ -372,6 +381,33 @@ final class AppCoordinator: ObservableObject {
     func updateHUDAppearance() {
         recordingHUD.setBackdropOpacity(settings.hudOpacity)
         if !settings.showRecordingHUD { recordingHUD.hide() }
+    }
+
+    /// Show the indicator as a still preview and restart the clock that takes it
+    /// away again.
+    ///
+    /// Called on every change to the opacity, so a continuous drag keeps pushing
+    /// the dismissal back and the preview stays up for as long as the user is
+    /// adjusting it — and lingers a moment afterwards, which is the point: the
+    /// last thing they did was let go, and they need to see the result of it.
+    func previewHUDAppearance() {
+        guard settings.showRecordingHUD else { return }
+        settingsPreviewHUD.showPreview()
+
+        previewDismissTask?.cancel()
+        previewDismissTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_400_000_000)
+            guard !Task.isCancelled else { return }
+            settingsPreviewHUD.hidePreview()
+        }
+    }
+
+    /// Take the preview away now — used when Settings closes, so the indicator
+    /// cannot outlive the window it belongs to.
+    func endPreviewHUDAppearance() {
+        previewDismissTask?.cancel()
+        previewDismissTask = nil
+        settingsPreviewHUD.hidePreview()
     }
 
     func resetHoldHotkey() { settings.holdHotkey = .defaultHoldHotkey; applySettings() }

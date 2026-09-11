@@ -47,6 +47,8 @@ struct SettingsView: View {
         }
         .onDisappear {
             coordinator.micTestManager.reset()
+            // The preview belongs to this window; it must not outlive it.
+            coordinator.endPreviewHUDAppearance()
         }
     }
 
@@ -197,8 +199,12 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                         Slider(value: $coordinator.settings.hudOpacity,
                                in: 0.0...1.0) { editing in
-                            // Save once, when the drag ends — but preview live.
-                            if !editing { coordinator.applySettings() }
+                            // The indicator appears as soon as the slider is
+                            // grabbed, so the effect of the drag is visible while
+                            // it is being made rather than only afterwards. The
+                            // settings themselves are still saved once, at the end.
+                            if editing { coordinator.previewHUDAppearance() }
+                            else { coordinator.applySettings() }
                         }
                         .frame(maxWidth: 150)
                         .accessibilityLabel("Opacity")
@@ -210,6 +216,10 @@ struct SettingsView: View {
                     .padding(.leading, 2)
                     .onChange(of: coordinator.settings.hudOpacity) { _ in
                         coordinator.updateHUDAppearance()
+                        // Also covers the keyboard, where there is no drag to
+                        // begin: changing the value by any means brings the
+                        // indicator up.
+                        coordinator.previewHUDAppearance()
                     }
                     .help("How strongly the indicator is frosted. At 100% it is the lightest frost it has ever been — this used to be the most transparent setting — and turning it down fades the frost itself, so the desktop shows through more. The level dots and timer stay fully opaque.")
                 }

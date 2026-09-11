@@ -39,12 +39,33 @@ enum RecordingHUDState: Equatable {
 /// Kept separate from `AudioRecorder` because the HUD outlives capture: it holds
 /// a brief "Copied" confirmation after recording has already stopped.
 @MainActor
+/// A still frame of the indicator, used by the Settings preview.
+///
+/// The preview exists so the opacity slider can be judged by eye instead of by
+/// guesswork: opacity decides how much desktop shows through the frost, and that
+/// can only be assessed against a real backdrop. Producing it records nothing and
+/// never touches the microphone.
+struct HUDPreview {
+    /// Amplitude per column, oldest first.
+    let bins: [Float]
+    /// Reference time of the newest bin. The matrix is drawn at exactly this
+    /// instant and then left alone, so the trace stays put instead of scrolling
+    /// out of the window the way a live one does.
+    let newest: TimeInterval
+    let interval: TimeInterval
+}
+
 final class RecordingHUDModel: ObservableObject {
     @Published var state: RecordingHUDState = .recording
 
     /// Opacity of the backdrop only — never the waveform or text, which must stay
     /// fully legible however transparent the panel gets.
     @Published var backdropOpacity: Double = 0.7
+
+    /// Non-nil while the indicator is being shown as a still preview from
+    /// Settings. It switches the matrix off the live clock and onto one frozen
+    /// draw, so what the user is judging is the appearance and nothing else.
+    @Published var preview: HUDPreview?
 
     /// Where the clip will land: the app that was frontmost when capture began.
     ///
@@ -99,6 +120,10 @@ final class RecordingHUDController {
     private let recorder: AudioRecorder
     private var dismissTask: Task<Void, Never>?
 
+    /// Bumped whenever a preview fade starts, so a fade-out that is overtaken by a
+    /// new preview cannot order the panel out from under it.
+    private var previewFade = 0
+
     /// Held while the indicator is on screen to keep App Nap from throttling it.
     ///
     /// This matters more than it looks. DubScribe is an accessory app that is
@@ -133,6 +158,96 @@ final class RecordingHUDController {
     func setTargetApplication(name: String?, icon: NSImage?) {
         model.targetAppName = name
         model.targetAppIcon = icon
+    }
+
+    /// True while the indicator is on screen as a still preview rather than a
+    /// live recording.
+    var isPreviewing: Bool { model.preview != nil }
+
+    /// Show the indicator as a still preview, for judging its appearance while the
+    /// opacity slider is being adjusted.
+    ///
+    /// Nothing is recorded and the recorder is never consulted — the frozen sample
+    /// below stands in for live audio. No activity assertion is taken either: the
+    /// preview is drawn exactly once, so there is no animation to keep smooth.
+    func showPreview() {
+        // If the real indicator is already up, the user can see the real thing.
+        // A frozen copy on top of it would only be confusing.
+        guard !isVisible else { return }
+
+        previewFade += 1          // invalidate any fade-out still in flight
+        dismissTask?.cancel()
+        dismissTask = nil
+
+        model.preview = Self.previewSample()
+        model.state = .recording
+        // No destination: there is no clip and no frontmost app to name, so the
+        // panel falls back to its generic "Clipboard" wording.
+        model.targetAppName = nil
+        model.targetAppIcon = nil
+
+        let panel = self.panel ?? makePanel()
+        self.panel = panel
+        reposition(panel)
+
+        // Fade in rather than pop in. The preview appears every time the slider is
+        // touched, and at that frequency a hard cut is jarring; a short fade reads
+        // as a response to the adjustment rather than as a new window.
+        panel.alphaValue = 0
+        panel.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.18
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().alphaValue = 1
+        }
+    }
+
+    /// Fade the preview out and take it off screen.
+    ///
+    /// The frozen sample is cleared only once the fade has finished, so the panel
+    /// does not visibly empty itself on the way out.
+    func hidePreview() {
+        guard let panel, panel.isVisible, isPreviewing else { return }
+
+        previewFade += 1
+        let generation = previewFade
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.25
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            panel.animator().alphaValue = 0
+        }, completionHandler: { [weak self] in
+            guard let self, self.previewFade == generation else { return }
+            panel.orderOut(nil)
+            panel.alphaValue = 1
+            self.model.preview = nil
+        })
+    }
+
+    /// A fixed, speech-shaped sample for the preview.
+    ///
+    /// Deliberately deterministic rather than random: two glances at the slider
+    /// should differ only by the opacity being adjusted. The envelope is four
+    /// utterances of different lengths with gaps between them — a solid block would
+    /// make every setting look identical, and a single smooth hump would not show
+    /// what the matrix does with the quiet parts, which is most of what there is to
+    /// see at thirteen rows.
+    private static func previewSample() -> HUDPreview {
+        let interval: TimeInterval = 0.02
+        let count = Int((DotMatrixGeometry.windowSeconds / interval).rounded())
+        let bins: [Float] = (0..<count).map { index in
+            let t = Double(index) / Double(max(count - 1, 1))
+            let envelope =
+                exp(-pow((t - 0.16) / 0.085, 2)) * 0.70
+                + exp(-pow((t - 0.44) / 0.105, 2)) * 0.95
+                + exp(-pow((t - 0.70) / 0.075, 2)) * 0.55
+                + exp(-pow((t - 1.02) / 0.130, 2)) * 0.80
+            // A slow wobble, so the trace does not read as a smooth synthetic hum.
+            let wobble = 0.78 + 0.22 * sin(t * 47)
+            return Float(min(1.0, envelope * wobble))
+        }
+        return HUDPreview(bins: bins,
+                          newest: Date.timeIntervalSinceReferenceDate,
+                          interval: interval)
     }
 
     /// Show the indicator and begin tracking the live level.
@@ -421,87 +536,130 @@ struct RecordingHUDView: View {
     /// waveform above and below the axis. Silence therefore draws a flat line of
     /// single dots through the middle, exactly as a waveform should.
     ///
-    /// The scroll is driven by `TimelineView(.animation)`, so positions are
-    /// recomputed from the clock every frame. Audio only arrives about ten times
+    /// The scroll is driven by `TimelineView(.animation)` whenever this is the live
+    /// trace, so positions are recomputed from the clock every frame. Audio only arrives about ten times
     /// a second, and placing columns by *age* rather than by array index is what
     /// turns that into continuous motion: two frames a frame apart produce
     /// positions a frame apart, with no quantisation to bin boundaries.
+    @ViewBuilder
     private var dotMatrix: some View {
-        TimelineView(.animation) { timeline in
+        matrixContent
+            .frame(maxWidth: .infinity)
+            .frame(height: Self.matrixHeight)
+    }
+
+    /// Either the live trace or a frozen preview of it.
+    ///
+    /// Two render paths over one drawing routine. Normally the trace is driven by
+    /// `TimelineView(.animation)`, so positions are recomputed from the clock every
+    /// frame. The preview uses a plain `Canvas` instead: it draws once, at a single
+    /// frozen instant, and is never redrawn. That keeps it still — a preview that
+    /// scrolled away would be judged on the wrong thing — and costs nothing while
+    /// it is on screen, which matters because it can sit there for as long as the
+    /// user keeps fiddling with the slider.
+    @ViewBuilder
+    private var matrixContent: some View {
+        if let preview = model.preview {
             Canvas { context, size in
-                let bins = recorder.waveform
-
-                // Draw slightly behind real time. A single audio callback hands
-                // over a whole buffer's worth of bins at once — about six every
-                // 100 ms — and drawing them the moment they arrive is what makes
-                // the trace advance in visible 10 Hz steps. Holding them back by
-                // a little more than one callback means each bin is released when
-                // its own moment arrives instead, so new data flows in at the
-                // rate it was captured rather than in bursts.
-                let now = timeline.date.timeIntervalSinceReferenceDate - Self.revealDelay
-
-                let columns = DotMatrixGeometry.visibleColumns(
-                    binCount: bins.count,
-                    newest: recorder.waveformEnd,
-                    interval: recorder.waveformBinInterval,
-                    now: now,
-                    width: size.width
-                )
-
-                let pitch = Self.dotSize + Self.dotGap
-                let top = (size.height - Self.matrixHeight) / 2
-                let centreRow = Self.matrixRows / 2
-                let centreY = top + CGFloat(centreRow) * pitch
-
-                guard !columns.isEmpty else {
-                    // Silence — and equally the moment before the first buffer
-                    // arrives, which the reveal delay stretches to about 220 ms.
-                    //
-                    // Drawing the flat axis rather than nothing is not merely
-                    // cosmetic, and the reason is not obvious: an *empty* Canvas
-                    // is pathological. Measured at ~108% CPU against ~30% when it
-                    // draws, because SwiftUI appears to keep re-evaluating a
-                    // display list that produces nothing at all. A flat line is
-                    // also, conveniently, exactly what silence looks like on a
-                    // waveform.
-                    var x: CGFloat = 0
-                    while x < size.width {
-                        context.fill(
-                            Path(ellipseIn: CGRect(x: x, y: centreY,
-                                                   width: Self.dotSize, height: Self.dotSize)),
-                            with: .color(Color.primary.opacity(Self.edgeFade(x, width: size.width)))
-                        )
-                        x += pitch
-                    }
-                    return
-                }
-
-                for column in columns {
-                    // Outward from the centre: how many dots the amplitude lights.
-                    // The settle term springs the column up to its height rather
-                    // than stamping it there.
-                    let amplitude = Self.displayLevel(bins[column.index])
-                        * Self.elasticSettle(CGFloat(column.age / Self.settleSeconds))
-                    let reach = Int((amplitude * CGFloat(centreRow)).rounded())
-                    let fade = Self.edgeFade(column.x, width: size.width)
-
-                    for row in (centreRow - reach)...(centreRow + reach) {
-                        let rect = CGRect(
-                            x: column.x,
-                            y: top + CGFloat(row) * pitch,
-                            width: Self.dotSize,
-                            height: Self.dotSize
-                        )
-                        context.fill(
-                            Path(ellipseIn: rect),
-                            with: .color(Color.primary.opacity(fade))
-                        )
-                    }
+                drawMatrix(&context, size: size,
+                           bins: preview.bins,
+                           newest: preview.newest,
+                           interval: preview.interval,
+                           now: preview.newest,
+                           springy: false)
+            }
+        } else {
+            TimelineView(.animation) { timeline in
+                Canvas { context, size in
+                    drawMatrix(&context, size: size,
+                               bins: recorder.waveform,
+                               newest: recorder.waveformEnd,
+                               interval: recorder.waveformBinInterval,
+                               // Draw slightly behind real time. A single audio
+                               // callback hands over a whole buffer's worth of bins
+                               // at once — about six every 100 ms — and drawing them
+                               // the moment they arrive is what makes the trace
+                               // advance in visible 10 Hz steps. Holding them back by
+                               // a little more than one callback means each bin is
+                               // released when its own moment arrives instead, so new
+                               // data flows in at the rate it was captured rather
+                               // than in bursts.
+                               now: timeline.date.timeIntervalSinceReferenceDate
+                                    - Self.revealDelay,
+                               springy: true)
                 }
             }
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: Self.matrixHeight)
+    }
+
+    /// Draw one frame of the matrix at `now`.
+    ///
+    /// `springy` is true only for the live trace. There, a new column springs up to
+    /// its height as it arrives — the overshoot is where the elasticity comes from.
+    /// A still preview has no arriving columns, so leaving the springs in would
+    /// freeze the newest few columns part-way up their travel, which reads as a
+    /// rendering fault rather than as motion.
+    private func drawMatrix(_ context: inout GraphicsContext, size: CGSize,
+                            bins: [Float], newest: TimeInterval,
+                            interval: TimeInterval, now: TimeInterval,
+                            springy: Bool) {
+        let columns = DotMatrixGeometry.visibleColumns(
+            binCount: bins.count,
+            newest: newest,
+            interval: interval,
+            now: now,
+            width: size.width
+        )
+
+        let pitch = Self.dotSize + Self.dotGap
+        let top = (size.height - Self.matrixHeight) / 2
+        let centreRow = Self.matrixRows / 2
+        let centreY = top + CGFloat(centreRow) * pitch
+
+        guard !columns.isEmpty else {
+            // Silence — and equally the moment before the first buffer arrives,
+            // which the reveal delay stretches to about 220 ms.
+            //
+            // Drawing the flat axis rather than nothing is not merely cosmetic, and
+            // the reason is not obvious: an *empty* Canvas is pathological. Measured
+            // at ~108% CPU against ~30% when it draws, because SwiftUI appears to
+            // keep re-evaluating a display list that produces nothing at all. A flat
+            // line is also, conveniently, exactly what silence looks like on a
+            // waveform.
+            var x: CGFloat = 0
+            while x < size.width {
+                context.fill(
+                    Path(ellipseIn: CGRect(x: x, y: centreY,
+                                           width: Self.dotSize, height: Self.dotSize)),
+                    with: .color(Color.primary.opacity(Self.edgeFade(x, width: size.width)))
+                )
+                x += pitch
+            }
+            return
+        }
+
+        for column in columns {
+            // Outward from the centre: how many dots the amplitude lights. The
+            // settle term springs the column up to its height rather than stamping
+            // it there.
+            let amplitude = Self.displayLevel(bins[column.index])
+                * (springy ? Self.elasticSettle(CGFloat(column.age / Self.settleSeconds)) : 1)
+            let reach = Int((amplitude * CGFloat(centreRow)).rounded())
+            let fade = Self.edgeFade(column.x, width: size.width)
+
+            for row in (centreRow - reach)...(centreRow + reach) {
+                let rect = CGRect(
+                    x: column.x,
+                    y: top + CGFloat(row) * pitch,
+                    width: Self.dotSize,
+                    height: Self.dotSize
+                )
+                context.fill(
+                    Path(ellipseIn: rect),
+                    with: .color(Color.primary.opacity(fade))
+                )
+            }
+        }
     }
 
     /// Geometry of the matrix: fine round dots, roughly square cells.
