@@ -44,6 +44,18 @@ jobs:
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          # Build the release as a draft rather than publishing on the tag.
+          #
+          # Every release up to 0.6.4 went live the moment the tag was pushed.
+          # That is fine for a one-line change, but it means the first person to
+          # learn whether the artifact actually runs is a user: CI proves the code
+          # compiles, and nothing more. A draft builds and attaches the same
+          # artifacts, then waits for a human to download the DMG, launch it, and
+          # publish deliberately.
+          #
+          # Also note the tag is never checked against MARKETING_VERSION, so a
+          # mismatched tag builds whatever happens to be in the tree.
+          draft: true
           files: |
             release_dmg/DubScribe-macOS-arm64.dmg
             release_dmg/DubScribe-macOS-arm64.zip
