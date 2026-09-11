@@ -32,48 +32,26 @@ struct DubScribeApp: App {
         .defaultPosition(.center)
     }
 
-    @ViewBuilder
+    /// The menu-bar mark: the three-bar form from the app icon.
+    ///
+    /// This is the asset rather than a drawn `Shape`. A custom `Shape` with
+    /// `.fill(...)` and a `.frame(...)` renders as *nothing* here — verified by
+    /// A/B against this view with the same build settings, where a text label, an
+    /// SF Symbol, and this image all render while the shape produced not one
+    /// differing pixel. Menu-bar labels are rasterised by AppKit as template
+    /// images, and a bare `Shape` has no intrinsic size to rasterise.
+    ///
+    /// It is deliberately `.template` so macOS tints it to match the menu bar,
+    /// light or dark. That has one consequence worth knowing: a template image
+    /// ignores `foregroundStyle`, so the icon cannot turn red while recording —
+    /// tried, and it renders white regardless. Recording state is shown by the
+    /// menu's own status line instead, which is where it can also say *what* is
+    /// happening rather than only *that* something is.
     private var menuBarLabel: some View {
-        let isRecording = coordinator.recordingState.isRecording
-
-        StatusGlyph()
-            .fill(isRecording ? Color.red : Color.primary)
-            .frame(width: 17, height: 15)
-            .accessibilityLabel(isRecording ? "DubScribe is recording" : "DubScribe")
-    }
-}
-
-/// The menu-bar mark: the app icon's bar form, drawn rather than loaded.
-///
-/// This was an `Image("StatusGlyph")` asset, which rendered as nothing at all.
-/// An `Image` that fails to resolve draws empty — no fallback, no error, no log
-/// — so the status item became an invisible button. Drawing it as a `Shape`
-/// removes that failure mode completely: there is no lookup, no raster, and no
-/// scale to go wrong, and it is a true template in the sense that matters (it
-/// takes its colour from the surrounding foreground style).
-///
-/// Bars, not the dot matrix: at this size the dots fall below a pixel and smear
-/// into grey. See the icon notes in ideas/002-clip-recorder.
-private struct StatusGlyph: Shape {
-    /// Relative bar heights, matching the 16px app icon.
-    private let heights: [CGFloat] = [0.40, 1.0, 0.60]
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let gap = rect.width * 0.22
-        let barWidth = (rect.width - gap * CGFloat(heights.count - 1)) / CGFloat(heights.count)
-        let radius = min(barWidth / 2, rect.height / 6)
-
-        for (index, height) in heights.enumerated() {
-            let barHeight = rect.height * height
-            let bar = CGRect(
-                x: rect.minX + CGFloat(index) * (barWidth + gap),
-                y: rect.midY - barHeight / 2,
-                width: barWidth,
-                height: barHeight
-            )
-            path.addRoundedRect(in: bar, cornerSize: CGSize(width: radius, height: radius))
-        }
-        return path
+        Image("StatusGlyph")
+            .renderingMode(.template)
+            .accessibilityLabel(coordinator.recordingState.isRecording
+                                ? "DubScribe is recording"
+                                : "DubScribe")
     }
 }
