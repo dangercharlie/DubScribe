@@ -91,13 +91,17 @@ macOS 13 or later, Apple Silicon, microphone access.
 
 ## About
 
-DubScribe is a vibe-coded experiment that turned into a tool I use every day. The
-product brief and iteration prompts were written with ChatGPT; the app was
-generated and refined with Claude, then reviewed and tested by hand against real
-use. It began from one line:
+DubScribe is a vibe-coded experiment that turned into a tool I use every day. It
+began from one line:
 
 > Make a simple macOS app where a hotkey records a short WAV clip and
 > automatically copies it to the clipboard.
+
+The first release was written with ChatGPT for the product brief and Claude for
+the implementation. **0.7.0 was built in conjunction with DeepSeek 4.1 Flash** —
+including self-deleting clips, the recording indicator and its dot-matrix
+waveform, and a VoiceOver audit of the whole interface. Everything is reviewed
+and tested by hand against real use.
 
 It is an early release. The audio and hotkey paths are stable; expect rough edges
 around unusual hardware and future macOS updates. Release notes live in
