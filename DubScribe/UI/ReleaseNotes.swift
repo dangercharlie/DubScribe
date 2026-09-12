@@ -8,9 +8,14 @@ import SwiftUI
 /// whole pitch is that it stays on your machine. The cost is that notes ship
 /// with the build, which is exactly right: they describe *this* build.
 ///
-/// Add a new entry for each release. Keep the four items the window can show —
-/// more than that stops being glanceable and turns into a changelog, which is
-/// what CHANGELOG.md is for.
+/// Add an entry for a release that changes something a user would notice. A
+/// bug-fix release deliberately gets none: the popup appears only when the
+/// running version has an entry, so leaving one out keeps the update silent
+/// rather than re-showing old notes. Bug fixes are documented in CHANGELOG.md
+/// instead, which is where anyone wanting the detail would look anyway.
+///
+/// Keep to the four items the window can show — more than that stops being
+/// glanceable and turns into a changelog, which is what CHANGELOG.md is for.
 enum ReleaseNotes {
 
     /// Notes for the version currently running, or nil if there are none.
@@ -19,7 +24,7 @@ enum ReleaseNotes {
         return all.first { $0.version == version }
     }
 
-    static let all: [Release] = [v0_7_1, v0_7_0]
+    static let all: [Release] = [v0_7_0]
 
     struct Release {
         let version: String
@@ -33,20 +38,6 @@ enum ReleaseNotes {
         let title: String
         let detail: String
     }
-
-    private static let v0_7_1 = Release(
-        version: "0.7.1",
-        tagline: "A fix for recordings that opened Apple Music.",
-        items: [
-            Item(symbol: "music.note",
-                 title: "\"Pause media\" stays out of Music",
-                 detail: "With pause media on and nothing playing, finishing a recording could open Apple Music. It no longer does. Pausing and resuming music you are actually listening to works exactly as before."),
-
-            Item(symbol: "speaker.slash",
-                 title: "Nothing playing means nothing to pause",
-                 detail: "DubScribe now checks whether any other app is producing sound before pausing. If none is, it leaves your audio alone instead of sending a play command into an empty room."),
-        ]
-    )
 
     private static let v0_7_0 = Release(
         version: "0.7.0",

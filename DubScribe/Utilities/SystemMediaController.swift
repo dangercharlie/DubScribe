@@ -48,7 +48,37 @@ actor SystemMediaController {
     /// Music. The explicit players above are unaffected, because they are only
     /// reached when their app is already running.
     private func isOtherProcessProducingAudio() -> Bool {
-        guard #available(macOS 14.2, *) else { return false }
+        !pidsProducingAudio().isEmpty
+    }
+
+    /// True when the given app currently has an audio-producing process.
+    ///
+    /// Used to skip the Chrome tab sweep when Chrome is running but silent.
+    /// The sweep is expensive and, on a window with an unresponsive tab, can
+    /// hang for minutes — so it is worth paying a cheap CoreAudio query to
+    /// avoid it in the common case of Chrome sitting open with no media.
+    private func isAppProducingAudio(_ bundleID: String) -> Bool {
+        let pids = pidsProducingAudio()
+        guard !pids.isEmpty else { return false }
+        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+        for app in apps where pids.contains(app.processIdentifier) { return true }
+        // Chrome plays audio in helper processes, which do not share the app's
+        // bundle identifier lookups, so match on the executable path too.
+        for pid in pids {
+            if let url = NSRunningApplication(processIdentifier: pid)?.executableURL,
+               url.path.contains("/Google Chrome") || url.path.contains("Chrome Helper") {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// PIDs of every other process currently producing audio output.
+    ///
+    /// Public CoreAudio only — no private framework, no permission. Returns an
+    /// empty set below macOS 14.2, where the per-process API does not exist.
+    private func pidsProducingAudio() -> [pid_t] {
+        guard #available(macOS 14.2, *) else { return [] }
 
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyProcessObjectList,
@@ -58,14 +88,15 @@ actor SystemMediaController {
         var size: UInt32 = 0
         guard AudioObjectGetPropertyDataSize(
             AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size
-        ) == noErr else { return false }
+        ) == noErr else { return [] }
 
         var processObjects = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
         guard AudioObjectGetPropertyData(
             AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &processObjects
-        ) == noErr else { return false }
+        ) == noErr else { return [] }
 
         let ownPID = ProcessInfo.processInfo.processIdentifier
+        var result: [pid_t] = []
 
         for object in processObjects {
             var runningAddress = AudioObjectPropertyAddress(
@@ -87,10 +118,11 @@ actor SystemMediaController {
             var pidSize = UInt32(MemoryLayout<pid_t>.size)
             guard AudioObjectGetPropertyData(object, &pidAddress, 0, nil, &pidSize, &pid) == noErr else { continue }
 
-            if pid != ownPID { return true }
+            // Our own start cue would otherwise count as "something is playing".
+            if pid != ownPID { result.append(pid) }
         }
 
-        return false
+        return result
     }
 
     // MARK: - System Volume (CoreAudio)
@@ -178,12 +210,6 @@ actor SystemMediaController {
             }
         }
 
-        // Try Chrome tabs directly. This catches YouTube even when macOS blocks media-key events.
-        if pauseChromeMedia() {
-            pausedSources.insert(.chrome)
-            logMedia("Paused Chrome media")
-        }
-
         // Fallback for anything the explicit players above did not catch (Safari,
         // a podcast app, an audio player with no scripting dictionary). This used
         // to post a synthetic media key with CGEvent, which requires the user to
@@ -196,6 +222,13 @@ actor SystemMediaController {
         // Gated on there actually being audio to pause. Without this check the
         // bare `play` in resumeMedia() launches Apple Music when nothing was
         // playing — see isOtherProcessProducingAudio().
+        //
+        // This runs BEFORE the Chrome sweep, not after. The sweep drives
+        // JavaScript in every open tab, and NSAppleScript cannot be interrupted
+        // or timed out by the target, so a single unresponsive tab used to stall
+        // this whole actor: QuickTime (which has no dedicated path and relies on
+        // this fallback) never paused, and resume never ran. MediaRemote is the
+        // cheap, reliable route, so it goes first.
         if pausedSources.isEmpty {
             if isOtherProcessProducingAudio() {
                 sendMediaRemote(.pause)
@@ -206,6 +239,23 @@ actor SystemMediaController {
                 // what stops resumeMedia() from sending a stray play command.
                 logMedia("No media detected as playing - skipping pause")
             }
+        }
+
+        // Chrome tabs, for in-page media that is not a Now Playing client (a
+        // YouTube tab on a paused profile, say). Only worth the sweep when
+        // Chrome is actually making sound — otherwise skip it entirely, which
+        // avoids the per-tab JavaScript round-trips on most recordings.
+        //
+        // Deliberately not conditioned on `pausedSources.isEmpty`: a user can
+        // have Music and a browser tab playing at once, and both should pause.
+        // If MediaRemote above already handled Chrome's audio this is a no-op.
+        if isAppRunning("com.google.Chrome"), isAppProducingAudio("com.google.Chrome") {
+            if pauseChromeMedia() {
+                pausedSources.insert(.chrome)
+                logMedia("Paused Chrome media")
+            }
+        } else if isAppRunning("com.google.Chrome") {
+            logMedia("Chrome sweep skipped - no Chrome audio detected")
         }
     }
 
@@ -311,16 +361,56 @@ actor SystemMediaController {
 
     // MARK: - AppleScript Helpers
 
+    /// How long a single Apple Events round-trip may take before we give up.
+    ///
+    /// `NSAppleScript` has no timeout of its own. A target app that fails to
+    /// answer blocks the caller forever, and because this controller is an
+    /// actor, a single unanswered call stalls every later one too: resume
+    /// never runs and the media feature stays dead for the rest of the
+    /// session. Measured: Chrome tabs 3-5 of a seven-tab window accepted a
+    /// JavaScript call and never replied, so `pauseChromeMedia()` hung
+    /// indefinitely and the MediaRemote fallback behind it never executed.
+    ///
+    /// This is a backstop, not a budget: every script we send normally
+    /// completes in well under 100 ms, so a timeout here only ever fires on a
+    /// genuinely stuck target.
+    private static let appleScriptTimeout: TimeInterval = 3
+
+    /// Runs AppleScript on a background queue and gives up after
+    /// `appleScriptTimeout`. Returns nil on error or timeout.
+    ///
+    /// The script is abandoned rather than cancelled when it times out —
+    /// NSAppleScript cannot interrupt an in-flight event — but because it runs
+    /// off the actor's executor the timeout still returns control, which is
+    /// the property that matters.
     @discardableResult
     private func runAppleScript(_ source: String) -> String? {
-        let script = NSAppleScript(source: source)
-        var error: NSDictionary?
-        let result = script?.executeAndReturnError(&error)
-        if let error {
+        let semaphore = DispatchSemaphore(value: 0)
+        // Boxed so the background write and the foreground read cannot race.
+        let box = ScriptResultBox()
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let script = NSAppleScript(source: source)
+            var error: NSDictionary?
+            let result = script?.executeAndReturnError(&error)
+            if let error {
+                box.store(error: error)
+            } else {
+                box.store(value: result?.stringValue)
+            }
+            semaphore.signal()
+        }
+
+        guard semaphore.wait(timeout: .now() + Self.appleScriptTimeout) == .success else {
+            logMedia("AppleScript timed out after \(Self.appleScriptTimeout)s - skipping")
+            return nil
+        }
+
+        if let error = box.error {
             logMedia("AppleScript error: \(error)")
             return nil
         }
-        return result?.stringValue
+        return box.value
     }
 
     private func isAppRunning(_ bundleID: String) -> Bool {
@@ -551,5 +641,36 @@ actor SystemMediaController {
     /// where anyone debugging would look anyway.
     private func logMedia(_ message: String) {
         print("[DubScribe] \(message)")
+    }
+}
+
+/// Carries an AppleScript result off the background queue it runs on.
+///
+/// The background queue and the waiting caller touch different fields, so the
+/// lock is what makes the handoff safe. `@unchecked Sendable` is honest here:
+/// every access is synchronised, which the compiler cannot verify on its own.
+private final class ScriptResultBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _value: String?
+    private var _error: NSDictionary?
+
+    func store(value: String?) {
+        lock.lock(); defer { lock.unlock() }
+        _value = value
+    }
+
+    func store(error: NSDictionary) {
+        lock.lock(); defer { lock.unlock() }
+        _error = error
+    }
+
+    var value: String? {
+        lock.lock(); defer { lock.unlock() }
+        return _value
+    }
+
+    var error: NSDictionary? {
+        lock.lock(); defer { lock.unlock() }
+        return _error
     }
 }

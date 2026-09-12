@@ -127,6 +127,18 @@ Mostly a rebuild of how the app looks and behaves.
   recording, Bluetooth headsets are released properly, shortcut labels show real
   key names, and a decoding bug that could silently reset your preferences is gone.
 
+## Fixed since 0.7.0
+
+Two bug-fix releases, no new features.
+
+- **0.7.1** — with *Pause media while recording* on and nothing playing, finishing
+  a recording could open Apple Music. Pausing now checks that another app is
+  actually producing sound before it sends anything.
+- **0.7.2** — with Chrome open, one unresponsive browser tab could stall the media
+  controller: QuickTime never paused, and nothing resumed afterwards for the rest
+  of the session. Apple Events calls now time out, and pausing runs before the
+  browser tab search rather than after it.
+
 Full detail in [CHANGELOG.md](CHANGELOG.md).
 
 ## Requirements

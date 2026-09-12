@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.7.2
+
+### Fixed
+
+- **"Pause media playback" could hang forever and stay broken for the rest of the
+  session.** When Chrome was running, DubScribe drove JavaScript into every open
+  tab to look for browser media. A tab that accepts the request but never answers
+  left that Apple Events call waiting with no timeout, which stalled the media
+  controller and stopped everything queued behind it. QuickTime never paused at
+  all, because it has no dedicated code path and relies on the fallback that ran
+  after the Chrome sweep; resume stopped working for *every* player, including
+  the ones that had paused correctly, because the same stalled controller was
+  still holding the next call. Closing and reopening the app was the only way
+  back. Reproduced with one unresponsive Chrome tab out of seven.
+
+  Three changes, each verified against a Chrome window engineered to hang:
+  Apple Events calls now time out after 3 seconds and are abandoned rather than
+  waited on; the reliable system-level fallback runs *before* the tab sweep
+  instead of after it; and the sweep is skipped entirely unless Chrome is
+  actually producing audio, so a silent Chrome window costs nothing. With the
+  sweep deliberately forced to hit the hanging tab, pause and resume both still
+  complete normally.
+
 ## v0.7.1
 
 ### Fixed
