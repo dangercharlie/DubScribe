@@ -293,45 +293,14 @@ struct SettingsView: View {
 
                 divider
                 row {
-                    Text("Pause media playback").settingsLabel()
-                } trailing: {
-                    Toggle("", isOn: $coordinator.settings.pauseMediaDuringRecording)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
-                        .accessibilityLabel("Pause media playback")
-                        .onChange(of: coordinator.settings.pauseMediaDuringRecording) { _ in coordinator.applySettings() }
-                }
-
-                if coordinator.settings.pauseMediaDuringRecording {
-                    divider
-                    row {
-                        Text("Resume delay").settingsLabel()
-                    } trailing: {
-                        HStack(spacing: 8) {
-                            Slider(value: $coordinator.settings.mediaResumeDelay, in: 0.0...1.0, step: 0.1)
-                                .frame(width: 90)
-                                .accessibilityLabel("Resume delay")
-                                .accessibilityValue(String(format: "%.1f seconds", coordinator.settings.mediaResumeDelay))
-                                .help("Crossover delay, so the tail of the recording is not overlapped.")
-                                .onChange(of: coordinator.settings.mediaResumeDelay) { _ in coordinator.applySettings() }
-                            Text(String(format: "%.1fs", coordinator.settings.mediaResumeDelay))
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .frame(width: 30, alignment: .trailing)
-                        }
-                    }
-                }
-
-                divider
-                row {
-                    Text("Mute system audio").settingsLabel()
+                    Text("Mute while recording").settingsLabel()
                 } trailing: {
                     Toggle("", isOn: $coordinator.settings.muteSystemAudioDuringRecording)
                         .labelsHidden()
                         .toggleStyle(.switch)
                         .controlSize(.small)
-                        .accessibilityLabel("Mute system audio")
+                        .accessibilityLabel("Mute while recording")
+                        .help("Silences your speakers for the duration of a recording, and restores the level afterwards.")
                         .onChange(of: coordinator.settings.muteSystemAudioDuringRecording) { _ in coordinator.applySettings() }
                 }
 

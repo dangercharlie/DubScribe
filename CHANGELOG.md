@@ -1,5 +1,41 @@
 # Changelog
 
+## v0.7.3
+
+### Changed
+
+- **"Pause media playback" has been removed, and muting is the way to keep audio
+  out of a recording.** Pausing had been the source of a run of bugs — a hang on an
+  unresponsive browser tab in 0.7.2, Apple Music launching itself in 0.7.1, and
+  before that a fallback that could not tell a real pause from a command sent into
+  the void. It worked by driving Apple Events at each media player, which needs
+  permission per player, can stall on one that never answers, and cannot reliably
+  know whether anything was actually playing. After three releases spent on it, the
+  honest conclusion is that the approach is not dependable enough to keep.
+
+  **"Mute while recording"** does the same job without any of it. It sets CoreAudio
+  properties on the output device, so there is no second process to talk to, no
+  timeout to get wrong, no permission to hold, and no way for it to start
+  playback in anything. It was already in the app; this release promotes it to the
+  single audio option and removes the pause setting and its resume-delay slider.
+
+  The Apple Events entitlement is gone with it, so DubScribe now asks for strictly
+  less access to other applications than it did — in fact none at all.
+
+### Fixed
+
+- **A recording started from the menu could only be stopped from the menu.**
+  Pressing "Start Recording" in the dropdown and then using either recording
+  shortcut did nothing: the hold shortcut was ignored because a recording was
+  already running, and its release was matched against the trigger that *started*
+  the recording, which was not the shortcut. Someone who started a recording by
+  clicking and then tried to stop it with the shortcut they had configured had no
+  way out but the menu — or waiting five minutes for the safety limit.
+
+  Both shortcuts now end a recording from any starting point: the hold key stops
+  on release, and the toggle shortcut stops on a second press, whichever way the
+  recording began.
+
 ## v0.7.2
 
 ### Fixed

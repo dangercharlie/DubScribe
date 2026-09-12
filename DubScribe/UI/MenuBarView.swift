@@ -165,9 +165,7 @@ struct MenuBarView: View {
 
         toggle("Show Level Indicator", systemImage: "waveform",
                isOn: $coordinator.settings.showRecordingHUD)
-        toggle("Pause Media While Recording", systemImage: "pause.circle",
-               isOn: $coordinator.settings.pauseMediaDuringRecording)
-        toggle("Mute System Audio", systemImage: "speaker.slash",
+        toggle("Mute While Recording", systemImage: "speaker.slash",
                isOn: $coordinator.settings.muteSystemAudioDuringRecording)
         toggle("Delete Clips Automatically", systemImage: "trash",
                isOn: $coordinator.settings.autoDeleteClips)

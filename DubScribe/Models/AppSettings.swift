@@ -14,9 +14,15 @@ struct AppSettings: Codable {
     /// into the room, and while this is off there is no pre-roll delay before
     /// capture begins, so recordings start instantly.
     var playStartCue: Bool
-    var muteSystemAudioDuringRecording: Bool      // mute output when recording
-    var pauseMediaDuringRecording: Bool            // pause playing media when recording
-    var mediaResumeDelay: Double                   // seconds (0.0–1.0) before resuming media
+    /// Mute the system output for the duration of a recording.
+    ///
+    /// This replaced pausing other media players in 0.7.3. Pausing needed Apple
+    /// Events (and MediaRemote) to talk to each player, which was unreliable and
+    /// could start playback in an app that was not playing. Muting is pure
+    /// CoreAudio on the output device: it cannot fail to reach a player, cannot
+    /// launch anything, and needs no permission — so the recording is clean for
+    /// the same reason, with none of the ways to go wrong.
+    var muteSystemAudioDuringRecording: Bool
 
     /// Threshold for the microphone-test meter only.
     /// (Supersedes the old voice-activation threshold, removed in 0.7.0.)
@@ -42,7 +48,7 @@ struct AppSettings: Codable {
     // General
     var launchAtLogin: Bool
 
-    // Legacy key kept so old saved data still decodes
+    // Legacy keys kept so old saved data still decodes
     var hotkey: Hotkey?
 
     // Explicit CodingKeys.
@@ -61,6 +67,10 @@ struct AppSettings: Codable {
         case showRecordingHUD
         case hudOpacity
         case muteSystemAudioDuringRecording
+        // Removed in 0.7.3. Kept only so blobs written by 0.7.x still decode:
+        // decoding a key needs a CodingKey to ask for, and without these the
+        // older blob would still parse, but listing them documents why they are
+        // here and stops a future reader thinking they were forgotten.
         case pauseMediaDuringRecording
         case mediaResumeDelay
         case micTestThreshold
@@ -81,8 +91,6 @@ struct AppSettings: Codable {
         playSounds: true,
         playStartCue: false,
         muteSystemAudioDuringRecording: false,
-        pauseMediaDuringRecording: false,
-        mediaResumeDelay: 0.0,
         micTestThreshold: 0.02,
         autoDeleteClips: true,
         maxClipsSizeMB: 250.0,
@@ -100,8 +108,6 @@ struct AppSettings: Codable {
         playSounds: Bool,
         playStartCue: Bool,
         muteSystemAudioDuringRecording: Bool,
-        pauseMediaDuringRecording: Bool,
-        mediaResumeDelay: Double,
         micTestThreshold: Float,
         autoDeleteClips: Bool,
         maxClipsSizeMB: Double,
@@ -116,8 +122,6 @@ struct AppSettings: Codable {
         self.playSounds = playSounds
         self.playStartCue = playStartCue
         self.muteSystemAudioDuringRecording = muteSystemAudioDuringRecording
-        self.pauseMediaDuringRecording = pauseMediaDuringRecording
-        self.mediaResumeDelay = mediaResumeDelay
         self.micTestThreshold = micTestThreshold
         self.autoDeleteClips = autoDeleteClips
         self.maxClipsSizeMB = maxClipsSizeMB
@@ -153,8 +157,6 @@ struct AppSettings: Codable {
         showRecordingHUD = try c.decodeIfPresent(Bool.self, forKey: .showRecordingHUD) ?? fallback.showRecordingHUD
         hudOpacity = try c.decodeIfPresent(Double.self, forKey: .hudOpacity) ?? fallback.hudOpacity
         muteSystemAudioDuringRecording = try c.decodeIfPresent(Bool.self, forKey: .muteSystemAudioDuringRecording) ?? fallback.muteSystemAudioDuringRecording
-        pauseMediaDuringRecording = try c.decodeIfPresent(Bool.self, forKey: .pauseMediaDuringRecording) ?? fallback.pauseMediaDuringRecording
-        mediaResumeDelay = try c.decodeIfPresent(Double.self, forKey: .mediaResumeDelay) ?? fallback.mediaResumeDelay
 
         // A user who tuned the old voice-activation slider keeps their tuning
         // rather than snapping back to the default.
@@ -190,13 +192,14 @@ struct AppSettings: Codable {
         try c.encode(showRecordingHUD, forKey: .showRecordingHUD)
         try c.encode(hudOpacity, forKey: .hudOpacity)
         try c.encode(muteSystemAudioDuringRecording, forKey: .muteSystemAudioDuringRecording)
-        try c.encode(pauseMediaDuringRecording, forKey: .pauseMediaDuringRecording)
-        try c.encode(mediaResumeDelay, forKey: .mediaResumeDelay)
         try c.encode(micTestThreshold, forKey: .micTestThreshold)
         try c.encode(autoDeleteClips, forKey: .autoDeleteClips)
         try c.encode(maxClipsSizeMB, forKey: .maxClipsSizeMB)
         try c.encode(launchAtLogin, forKey: .launchAtLogin)
         try c.encodeIfPresent(hotkey, forKey: .hotkey)
+        // pauseMediaDuringRecording / mediaResumeDelay are intentionally not
+        // encoded: the feature they configured was removed in 0.7.3. See the
+        // note in init(from:).
         // voiceActivationEnabled / Threshold / StopDelay are intentionally not
         // encoded. See the note in init(from:).
     }

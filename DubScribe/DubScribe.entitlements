@@ -17,10 +17,5 @@
 	     CGEventTap was required; that was stale. -->
 	<key>com.apple.security.app-sandbox</key>
 	<false/>
-
-	<!-- Allow sending Apple Events to Music, Spotify, and System Events for the
-	     optional pause/resume-media-while-recording feature. -->
-	<key>com.apple.security.automation.apple-events</key>
-	<true/>
 </dict>
 </plist>

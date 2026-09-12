@@ -33,7 +33,7 @@ nothing to switch to: the app is wherever you already are.
 <p align="center">
   <img src="screenshots/menu_bar.png" width="230" alt="The DubScribe menu: recording status, Start Recording, the situational settings nested with checkmarks, and quick access to the clips folder and Settings." />
   &nbsp;&nbsp;&nbsp;
-  <img src="screenshots/settings_window.png" width="300" alt="DubScribe settings, on the Recording tab: shortcuts, microphone and sounds, with an Advanced section holding media handling and the level indicator." />
+  <img src="screenshots/settings_window.png" width="300" alt="DubScribe settings, on the Recording tab: shortcuts, microphone and sounds, with an expanded Advanced section holding the start cue, muting, the level indicator and its transparency." />
 </p>
 
 ---
@@ -74,13 +74,13 @@ change while working, the clips folder, and Settings itself.
   as a dot-matrix waveform, and how long you have been going.
 - **Re-copy the last clip** without recording it again.
 - **Microphone selection**, with a test panel and live level guide.
-- **Optional media handling.** Pause other playback and mute system audio for the
-  length of a recording, then put it all back.
+- **Optional audio handling.** Mute your speakers for the length of a recording,
+  then put the level back exactly as it was.
 - **Clips clean up after themselves** — see below.
 
-Shortcuts use Carbon (`RegisterEventHotKey`), and pausing media uses MediaRemote,
-the same channel the keyboard's media keys use — so **DubScribe never asks for
-Accessibility permission**.
+Shortcuts use Carbon (`RegisterEventHotKey`) and muting uses CoreAudio, so
+**DubScribe never asks for Accessibility permission** — or for permission to
+control any other application.
 
 ## Clips clean up after themselves
 
@@ -129,7 +129,7 @@ Mostly a rebuild of how the app looks and behaves.
 
 ## Fixed since 0.7.0
 
-Two bug-fix releases, no new features.
+Three bug-fix releases, no new features.
 
 - **0.7.1** — with *Pause media while recording* on and nothing playing, finishing
   a recording could open Apple Music. Pausing now checks that another app is
@@ -138,6 +138,11 @@ Two bug-fix releases, no new features.
   controller: QuickTime never paused, and nothing resumed afterwards for the rest
   of the session. Apple Events calls now time out, and pausing runs before the
   browser tab search rather than after it.
+- **0.7.3** — *Pause media* is gone, replaced by *Mute while recording*. Three
+  releases of pause bugs made the case that the approach was not dependable
+  enough to keep; muting does the job with no way for it to hang, and no
+  permission to ask for. Also fixes a recording started from the menu being
+  stoppable only from the menu.
 
 Full detail in [CHANGELOG.md](CHANGELOG.md).
 

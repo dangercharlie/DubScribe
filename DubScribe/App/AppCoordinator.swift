@@ -78,13 +78,9 @@ final class AppCoordinator: ObservableObject {
         wireAudio()
         wireHotkeys()
 
-        // Register as a Now Playing client now rather than at the first pause.
-        // MediaRemote's registration is asynchronous, so a command sent in the
-        // same breath as registration is dropped: measured 3/6 that way against
-        // 9/9 when the registration is made well in advance. Costs nothing here,
-        // and it is what makes "Pause media playback" reliable rather than
-        // sometimes-working.
-        systemMediaController.prepareMediaControl()
+        // MediaRemote registration used to happen here, for the pause-media
+        // feature. That feature was removed in 0.7.3, so there is nothing to
+        // register for: the app no longer talks to other media players at all.
 
         // Track the frontmost app so the indicator can name the destination.
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
@@ -125,14 +121,24 @@ final class AppCoordinator: ObservableObject {
             self?.startRecording(trigger: .holdHotkey)
         }
         hotkeyManager.onHoldKeyUp = { [weak self] in
-            guard self?.recordingState.trigger == .holdHotkey else { return }
-            self?.stopRecording()
+            guard let self else { return }
+            // Deliberately not `trigger == .holdHotkey`. A recording started from
+            // the menu has trigger `.manual`, and the old check made every hotkey
+            // inert for it: pressing the hold key did nothing because a recording
+            // was already running, and releasing it matched no trigger, so the
+            // recording could only be stopped from the menu — which is exactly
+            // the dead end this fixes. Any release now ends a recording that this
+            // key started *or* one it is being used to stop.
+            if self.recordingState.isRecording {
+                self.stopRecording()
+            }
         }
         hotkeyManager.onPushKeyDown = { [weak self] in
             guard let self else { return }
-            if self.recordingState.trigger == .pushHotkey {
+            // Press to start, press again to stop — from any starting point.
+            if self.recordingState.isRecording {
                 self.stopRecording()
-            } else if !self.recordingState.isRecording {
+            } else {
                 self.startRecording(trigger: .pushHotkey)
             }
         }
@@ -151,7 +157,6 @@ final class AppCoordinator: ObservableObject {
             recordingState = .recording(startedAt: Date(), trigger: trigger)
             audioRecorder.selectedInputDeviceID = settings.selectedInputDeviceID
             let shouldMuteSystemAudio = settings.muteSystemAudioDuringRecording
-            let shouldPauseMedia = settings.pauseMediaDuringRecording
 
             pendingStartTask?.cancel()
             pendingMediaPauseTask?.cancel()
@@ -194,16 +199,11 @@ final class AppCoordinator: ObservableObject {
 
                 self.scheduleAutoStop()
 
-                if shouldMuteSystemAudio || shouldPauseMedia {
+                if shouldMuteSystemAudio {
                     self.pendingMediaPauseTask = Task { @MainActor [weak self] in
                         try? await Task.sleep(nanoseconds: 120_000_000)
                         guard let self, !Task.isCancelled, self.recordingState.isRecording else { return }
-                        if shouldMuteSystemAudio {
-                            await self.systemMediaController.muteSystemAudio()
-                        }
-                        if shouldPauseMedia {
-                            await self.systemMediaController.pauseMedia()
-                        }
+                        await self.systemMediaController.muteSystemAudio()
                     }
                 }
             }
@@ -279,22 +279,10 @@ final class AppCoordinator: ObservableObject {
         micTestManager.isRealRecordingActive = false
 
         let shouldRestoreSystemAudio = settings.muteSystemAudioDuringRecording
-        let shouldResumeMedia = settings.pauseMediaDuringRecording
-        if shouldRestoreSystemAudio || shouldResumeMedia {
-            let delay = settings.mediaResumeDelay
+        if shouldRestoreSystemAudio {
             let systemMediaController = systemMediaController
             Task {
-                if shouldRestoreSystemAudio {
-                    await systemMediaController.restoreSystemAudio()
-                }
-                // Resume media with configurable crossover delay.
-                // This is stop-side only; it should not affect recording startup.
-                if shouldResumeMedia {
-                    if delay > 0 {
-                        try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                    }
-                    await systemMediaController.resumeMedia()
-                }
+                await systemMediaController.restoreSystemAudio()
             }
         }
 
