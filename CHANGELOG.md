@@ -1,5 +1,64 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **"Pause media while recording" is back, rebuilt on a different footing.** It
+  was removed in 0.7.3 because it could not be made dependable. Every one of its
+  bugs traced to the same gap: it sent a pause without knowing whether anything
+  was playing, and so had no way to know whether a play was owed afterwards.
+
+  It now asks first. macOS no longer tells ordinary apps whether a player is
+  playing — asked directly, it answers "paused" for one that is audibly playing —
+  but it still tells its own tools, so DubScribe asks through `osascript` and
+  gets the real answer in about a tenth of a second. Nothing is sent to any other
+  app to do this, so there is no Automation prompt.
+
+  With that, the rules are simple. If nothing is playing, nothing is sent, so
+  there is nothing to undo. If something is, it is paused and remembered. When
+  the recording ends, a play is sent only if that same player is still the
+  system's active one — if it has quit, or another has taken its place, it is
+  left alone. Verified against stand-in players for each case that used to go
+  wrong: nothing playing, a paused player with other sound in the room, a player
+  that keeps the audio device open while paused (VLC does), a player that quits
+  mid-recording, and a recording too short for the pause to matter.
+
+  Two limits worth knowing. It pauses the one player macOS treats as active, the
+  same one the keyboard's play/pause key would reach, so a second thing playing
+  at the same time carries on. And the mechanism is Apple's to change: if a
+  future macOS stops answering, the option does nothing rather than guessing.
+  **Mute while recording** remains, and the two can be used together.
+
+  No Apple Events are involved any more, so the leftover usage description for
+  them is gone from the app's Info.plist.
+
+### Fixed
+
+- **"Mute while recording" could leave the output muted.** Three ways, all
+  closed: switching the setting off during a recording skipped the unmute;
+  quitting during a recording left the mute behind with nothing running to clear
+  it; and changing output mid-recording — plugging in headphones, say — unmuted
+  the new output and left the original one muted. The mute is now undone on
+  every path that ends a recording, on the device that was actually muted.
+- **It unmuted an output you had muted yourself.** If the output was already
+  muted when a recording began, it is now left exactly as it was.
+- **It rewrote the volume after every recording**, discarding a change made while
+  recording. The level is no longer touched on outputs that have a mute control.
+  On one that does not, the volume is taken to zero instead, where the output
+  allows it, and put back afterwards; previously nothing was muted there at all,
+  although the log said it was.
+- **The first 120 ms of a clip could contain whatever was playing.** The mute was
+  applied after the microphone had opened; it is now applied before. The stop
+  cue likewise waits for the unmute, so its start can no longer be cut off.
+- **Granting microphone access from the hold shortcut started a recording that
+  nothing was holding.** The key had been released while the permission prompt
+  was up, so the recording ran until the shortcut was pressed again or the
+  five-minute limit was reached. It now waits for the next press.
+- **"Copy Last Clip Again" during a recording made the app lose track of it.**
+  The recording carried on while the app showed it as finished, and the
+  five-minute limit no longer applied to it.
+
 ## v0.7.3
 
 ### Changed

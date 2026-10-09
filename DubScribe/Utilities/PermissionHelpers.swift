@@ -1,7 +1,6 @@
 import Foundation
 import AVFoundation
 import AppKit
-import CoreGraphics
 
 /// Handles microphone permission requests and status checks.
 enum PermissionHelpers {
@@ -12,10 +11,6 @@ enum PermissionHelpers {
 
     static var isMicrophoneAuthorized: Bool {
         microphoneAuthorizationStatus == .authorized
-    }
-
-    static var isMediaKeyControlAuthorized: Bool {
-        CGPreflightPostEventAccess()
     }
 
     /// Request microphone permission. Completion is called on the main thread.
@@ -45,17 +40,5 @@ enum PermissionHelpers {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
             NSWorkspace.shared.open(url)
         }
-    }
-
-    /// Opens the Privacy & Security > Accessibility section in System Settings.
-    static func openAccessibilitySettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
-    @discardableResult
-    static func requestMediaKeyControlPermission() -> Bool {
-        CGRequestPostEventAccess()
     }
 }

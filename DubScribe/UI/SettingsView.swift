@@ -275,7 +275,7 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Advanced settings")
             .accessibilityValue(advancedExpanded ? "Expanded" : "Collapsed")
-            .accessibilityHint("Shows media handling and the level indicator")
+            .accessibilityHint("Shows the start cue, media handling and the level indicator")
 
             if advancedExpanded {
                 divider
@@ -289,6 +289,19 @@ struct SettingsView: View {
                         .accessibilityLabel("Sound when recording starts")
                         .help("Capture begins only after the cue finishes, so the cue is never recorded.")
                         .onChange(of: coordinator.settings.playStartCue) { _ in coordinator.applySettings() }
+                }
+
+                divider
+                row {
+                    Text("Pause media while recording").settingsLabel()
+                } trailing: {
+                    Toggle("", isOn: $coordinator.settings.pauseMediaDuringRecording)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .accessibilityLabel("Pause media while recording")
+                        .help("Pauses what is playing when a recording starts, and resumes it afterwards. Does nothing if nothing is playing.")
+                        .onChange(of: coordinator.settings.pauseMediaDuringRecording) { _ in coordinator.applySettings() }
                 }
 
                 divider
