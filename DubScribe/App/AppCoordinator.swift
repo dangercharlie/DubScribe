@@ -167,14 +167,6 @@ final class AppCoordinator: ObservableObject {
             audioRecorder.selectedInputDeviceID = settings.selectedInputDeviceID
             let shouldMuteSystemAudio = settings.muteSystemAudioDuringRecording
 
-            // Asked for now rather than when the microphone opens: finding out
-            // what is playing takes about a tenth of a second, and starting it
-            // here lets that overlap the cue and the engine start instead of
-            // delaying the recording or landing late in it.
-            if settings.pauseMediaDuringRecording {
-                systemMediaController.pauseMedia()
-            }
-
             pendingStartTask?.cancel()
             pendingStartTask = Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -284,12 +276,6 @@ final class AppCoordinator: ObservableObject {
         autoStopTask?.cancel()
         autoStopTask = nil
 
-        // Here rather than further down, because the pause is requested the
-        // moment a recording is asked for and so has to be undone on the early
-        // return below as well. It does its work after this method returns, by
-        // which time the microphone is closed.
-        systemMediaController.resumeMedia()
-
         let recorderWasActive = audioRecorder.isRecording
         recordingState = .processing
         lastDuration = audioRecorder.recordingDuration
@@ -328,10 +314,8 @@ final class AppCoordinator: ObservableObject {
             // confirming a clip that does not exist.
             //
             // A recorder that failed to start gets here without `stopRecording()`
-            // ever running, so this is the only place its mute and its pause can
-            // be undone.
+            // ever running, so this is the only place its mute can be undone.
             systemMediaController.restoreSystemAudio()
-            systemMediaController.resumeMedia()
             recordingHUD.hide()
             recordingState = .failed(audioRecorder.lastError ?? "Unknown recording error.")
             return
@@ -424,7 +408,6 @@ final class AppCoordinator: ObservableObject {
         settings.save()
         hotkeyManager.configure(holdHotkey: settings.holdHotkey, pushHotkey: settings.pushHotkey)
         micTestManager.threshold = settings.micTestThreshold
-        if settings.pauseMediaDuringRecording { systemMediaController.prepareMediaControl() }
 
         // With voice activation gone the microphone is no longer held open
         // permanently. It is only hot during a real recording or an explicit
