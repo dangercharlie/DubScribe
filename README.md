@@ -129,7 +129,7 @@ Mostly a rebuild of how the app looks and behaves.
 
 ## Fixed since 0.7.0
 
-Three bug-fix releases, no new features.
+Four bug-fix releases, no new features.
 
 - **0.7.1** — with *Pause media while recording* on and nothing playing, finishing
   a recording could open Apple Music. Pausing now checks that another app is
@@ -143,6 +143,11 @@ Three bug-fix releases, no new features.
   enough to keep; muting does the job with no way for it to hang, and no
   permission to ask for. Also fixes a recording started from the menu being
   stoppable only from the menu.
+- **0.7.4** — *Mute while recording* could leave the output muted: after quitting
+  mid-recording, after turning the setting off mid-recording, or after switching
+  to headphones mid-recording. It also no longer unmutes an output you had muted
+  yourself, no longer resets your volume, and now mutes before the microphone
+  opens so a clip can't start with a moment of whatever was playing.
 
 Full detail in [CHANGELOG.md](CHANGELOG.md).
 
