@@ -74,14 +74,13 @@ change while working, the clips folder, and Settings itself.
   as a dot-matrix waveform, and how long you have been going.
 - **Re-copy the last clip** without recording it again.
 - **Microphone selection**, with a test panel and live level guide.
-- **Optional audio handling.** Pause whatever is playing for the length of a
-  recording and resume it afterwards, mute your speakers, or both.
+- **Optional audio handling.** Mute your speakers for the length of a recording,
+  then put them back exactly as they were.
 - **Clips clean up after themselves** — see below.
 
-Shortcuts use Carbon (`RegisterEventHotKey`), muting uses CoreAudio, and pausing
-goes through the same channel as the keyboard's media keys, so **DubScribe never
-asks for Accessibility permission** — or for permission to control any other
-application.
+Shortcuts use Carbon (`RegisterEventHotKey`) and muting uses CoreAudio, so
+**DubScribe never asks for Accessibility permission** — or for permission to
+control any other application.
 
 ## Clips clean up after themselves
 
