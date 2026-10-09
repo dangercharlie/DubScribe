@@ -164,7 +164,9 @@ began from one line:
 > automatically copies it to the clipboard.
 
 The first release was written with ChatGPT for the product brief and Claude for
-the implementation. **0.7.0 was built in conjunction with DeepSeek 4.1 Flash**.
+the implementation. **0.7.0 was built in conjunction with DeepSeek v4.1 Flash**.
+**0.7.4 was built with Opus 5.5**. Future releases will track the model in a
+separate .md file.
 
 It is an early release. The audio and hotkey paths are stable; expect rough edges
 around unusual hardware and future macOS updates.
