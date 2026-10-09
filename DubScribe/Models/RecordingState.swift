@@ -8,7 +8,7 @@ enum RecordingTrigger: Equatable {
 
 enum RecordingState: Equatable {
     case idle
-    case recording(startedAt: Date, trigger: RecordingTrigger)
+    case recording(startedAt: Date)
     case processing
     case copied(URL)
     case failed(String)
@@ -33,18 +33,13 @@ enum RecordingState: Equatable {
         return false
     }
 
-    var trigger: RecordingTrigger? {
-        if case .recording(_, let t) = self { return t }
-        return nil
-    }
-
     var copiedURL: URL? {
         if case .copied(let url) = self { return url }
         return nil
     }
 
     var startedAt: Date? {
-        if case .recording(let d, _) = self { return d }
+        if case .recording(let d) = self { return d }
         return nil
     }
 }

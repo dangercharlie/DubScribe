@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **"Mute while recording" could leave the output muted.** Three ways, all
+  closed: switching the setting off during a recording skipped the unmute;
+  quitting during a recording left the mute behind with nothing running to clear
+  it; and changing output mid-recording — plugging in headphones, say — unmuted
+  the new output and left the original one muted. The mute is now undone on
+  every path that ends a recording, on the device that was actually muted.
+- **It unmuted an output you had muted yourself.** If the output was already
+  muted when a recording began, it is now left exactly as it was.
+- **It rewrote the volume after every recording**, discarding a change made while
+  recording. The level is no longer touched on outputs that have a mute control.
+  On one that does not, the volume is taken to zero instead, where the output
+  allows it, and put back afterwards; previously nothing was muted there at all,
+  although the log said it was.
+- **The first 120 ms of a clip could contain whatever was playing.** The mute was
+  applied after the microphone had opened; it is now applied before. The stop
+  cue likewise waits for the unmute, so its start can no longer be cut off.
+- **Granting microphone access from the hold shortcut started a recording that
+  nothing was holding.** The key had been released while the permission prompt
+  was up, so the recording ran until the shortcut was pressed again or the
+  five-minute limit was reached. It now waits for the next press.
+- **"Copy Last Clip Again" during a recording made the app lose track of it.**
+  The recording carried on while the app showed it as finished, and the
+  five-minute limit no longer applied to it.
+
+### Removed
+
+- The leftover Apple Events usage description, from the pause-media feature
+  removed in 0.7.3, is gone from the app's Info.plist.
+
 ## v0.7.3
 
 ### Changed

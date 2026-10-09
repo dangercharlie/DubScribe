@@ -40,7 +40,6 @@ final class AppCoordinator: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
     private var pendingStartTask: Task<Void, Never>?
-    private var pendingMediaPauseTask: Task<Void, Never>?
     private var autoStopTask: Task<Void, Never>?
     private var noticeTask: Task<Void, Never>?
 
@@ -55,6 +54,9 @@ final class AppCoordinator: ObservableObject {
 
     /// Retained so the observation could be torn down with the coordinator.
     private var activationObserver: NSObjectProtocol?
+
+    /// Retained for the same reason. Undoes a mute if the app quits mid-recording.
+    private var terminationObserver: NSObjectProtocol?
 
     /// Guards against stacking a second permission alert while one is up.
     private var isShowingMicrophoneAlert = false
@@ -78,9 +80,16 @@ final class AppCoordinator: ObservableObject {
         wireAudio()
         wireHotkeys()
 
-        // MediaRemote registration used to happen here, for the pause-media
-        // feature. That feature was removed in 0.7.3, so there is nothing to
-        // register for: the app no longer talks to other media players at all.
+        // Quitting during a recording must not leave the speakers muted: the
+        // mute is a flag on the output device, so it outlives the process, and
+        // once the app is gone there is nothing left running to clear it.
+        terminationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.systemMediaController.restoreSystemAudio() }
+        }
 
         // Track the frontmost app so the indicator can name the destination.
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
@@ -154,12 +163,11 @@ final class AppCoordinator: ObservableObject {
 
         switch PermissionHelpers.microphoneAuthorizationStatus {
         case .authorized:
-            recordingState = .recording(startedAt: Date(), trigger: trigger)
+            recordingState = .recording(startedAt: Date())
             audioRecorder.selectedInputDeviceID = settings.selectedInputDeviceID
             let shouldMuteSystemAudio = settings.muteSystemAudioDuringRecording
 
             pendingStartTask?.cancel()
-            pendingMediaPauseTask?.cancel()
             pendingStartTask = Task { @MainActor [weak self] in
                 guard let self else { return }
 
@@ -172,6 +180,13 @@ final class AppCoordinator: ObservableObject {
                 await self.playStartCueAndWait()
 
                 guard !Task.isCancelled, self.recordingState.isRecording else { return }
+
+                // After the cue, so the cue is still heard, and before the
+                // microphone opens, so nothing that was playing reaches the head
+                // of the clip.
+                if shouldMuteSystemAudio {
+                    self.systemMediaController.muteSystemAudio()
+                }
 
                 self.audioRecorder.startRecording()
                 self.micTestManager.isRealRecordingActive = true
@@ -194,24 +209,21 @@ final class AppCoordinator: ObservableObject {
                 }
                 // Capture starts now, so stamp the clock now rather than when the
                 // shortcut was pressed.
-                self.recordingState = .recording(startedAt: Date(), trigger: trigger)
+                self.recordingState = .recording(startedAt: Date())
                 print("[DubScribe] Recording started (trigger=\(trigger))")
 
                 self.scheduleAutoStop()
-
-                if shouldMuteSystemAudio {
-                    self.pendingMediaPauseTask = Task { @MainActor [weak self] in
-                        try? await Task.sleep(nanoseconds: 120_000_000)
-                        guard let self, !Task.isCancelled, self.recordingState.isRecording else { return }
-                        await self.systemMediaController.muteSystemAudio()
-                    }
-                }
             }
 
         case .notDetermined:
             PermissionHelpers.requestMicrophonePermission { [weak self] granted in
-                if granted { self?.startRecording(trigger: trigger) }
-                else {
+                if granted {
+                    // Not for the hold shortcut. Its key was released while the
+                    // prompt was up, and that release arrived with nothing to
+                    // stop — so starting now would record with no key held and
+                    // nothing left to end it.
+                    if trigger != .holdHotkey { self?.startRecording(trigger: trigger) }
+                } else {
                     self?.recordingState = .failed("Microphone access denied.")
                     self?.offerMicrophoneSettings()
                 }
@@ -261,8 +273,6 @@ final class AppCoordinator: ObservableObject {
         guard recordingState.isRecording else { return }
         pendingStartTask?.cancel()
         pendingStartTask = nil
-        pendingMediaPauseTask?.cancel()
-        pendingMediaPauseTask = nil
         autoStopTask?.cancel()
         autoStopTask = nil
 
@@ -278,13 +288,10 @@ final class AppCoordinator: ObservableObject {
         audioRecorder.stopRecording()
         micTestManager.isRealRecordingActive = false
 
-        let shouldRestoreSystemAudio = settings.muteSystemAudioDuringRecording
-        if shouldRestoreSystemAudio {
-            let systemMediaController = systemMediaController
-            Task {
-                await systemMediaController.restoreSystemAudio()
-            }
-        }
+        // Not conditional on the setting: it may have been switched off since
+        // this recording began, and the controller knows whether it holds a mute.
+        // Before the cue, so the cue is not played into a muted output.
+        systemMediaController.restoreSystemAudio()
 
         playSound(named: "Pop")
     }
@@ -305,6 +312,10 @@ final class AppCoordinator: ObservableObject {
         guard let url else {
             // Nothing usable was captured, so take the indicator down rather than
             // confirming a clip that does not exist.
+            //
+            // A recorder that failed to start gets here without `stopRecording()`
+            // ever running, so this is the only place its mute can be undone.
+            systemMediaController.restoreSystemAudio()
             recordingHUD.hide()
             recordingState = .failed(audioRecorder.lastError ?? "Unknown recording error.")
             return
@@ -356,7 +367,10 @@ final class AppCoordinator: ObservableObject {
         let ok = ClipboardManager.copyWAVFile(url)
         if ok {
             clipStore.noteCopied(url)
-            recordingState = .copied(url)
+            // Not while recording. Every way of stopping checks `isRecording`
+            // first, so replacing the state here would leave a recording running
+            // that nothing could end.
+            if !recordingState.isRecording { recordingState = .copied(url) }
             postNotice("Copied to clipboard.")
         }
         return ok

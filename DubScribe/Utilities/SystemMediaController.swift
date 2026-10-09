@@ -14,53 +14,77 @@ import AudioToolbox
 ///
 /// Muting is a different kind of operation. It sets CoreAudio properties on the
 /// output device, so there is no second process to talk to, nothing to time out,
-/// no permission to hold, and no way for it to launch anything. The recording is
-/// kept clean for the same reason the pause approach was reaching for, without
-/// the ways it could go wrong.
-actor SystemMediaController {
+/// no permission to hold, and no way for it to launch anything.
+///
+/// Main-actor rather than an actor of its own: the CoreAudio calls are quick
+/// property accesses, and running them synchronously is what lets the
+/// coordinator order the mute against the microphone opening and the cues, and
+/// undo it from the terminate notification, where there is no time to wait on a
+/// task.
+@MainActor
+final class SystemMediaController {
 
-    // MARK: - Volume State
+    // MARK: - Mute State
 
-    /// The volume level captured before muting, so we can restore it.
-    private var savedVolume: Float?
-    /// Whether we actively muted the system (to avoid restoring when we didn't mute).
-    private var didMute = false
+    /// What a mute changed, so that restoring undoes exactly that and nothing else.
+    private enum Silenced {
+        /// The device's own mute flag was set.
+        case muteFlag(AudioObjectID)
+        /// The device has no usable mute flag, so its volume was taken to zero.
+        case volume(AudioObjectID, previous: Float32)
+    }
+
+    /// Set only while a mute of ours is in force. Holding the device here, rather
+    /// than looking the default output up again on restore, is what keeps a
+    /// mid-recording switch to headphones from unmuting the wrong device.
+    private var silenced: Silenced?
 
     // MARK: - System Volume (CoreAudio)
 
-    /// Mute the default output device and remember the level to restore.
+    /// Silence the default output device and remember how to undo it.
     ///
-    /// The volume is saved even though muting uses the device's own mute flag:
-    /// some output devices ignore that flag, and for those the saved level is
-    /// what lets `restoreSystemAudio()` put things back.
+    /// The mute flag is used where the device has one. Some outputs do not — an
+    /// HDMI display, some USB interfaces — and for those the volume is taken to
+    /// zero instead, with the previous level kept for the restore.
     func muteSystemAudio() {
+        guard silenced == nil else { return }
         guard let deviceID = defaultOutputDeviceID() else {
             print("[DubScribe] SystemMediaController: Could not find default output device")
             return
         }
 
-        // Save current volume before muting
-        savedVolume = getVolume(device: deviceID)
-        setMute(device: deviceID, muted: true)
-        didMute = true
-        print("[DubScribe] System audio muted (saved volume: \(savedVolume ?? -1))")
+        // Already muted by the user. Leave it alone and record nothing, so that
+        // the restore does not unmute an output they silenced on purpose.
+        if isMuted(device: deviceID) == true { return }
+
+        if setMute(device: deviceID, muted: true) {
+            silenced = .muteFlag(deviceID)
+            print("[DubScribe] System audio muted")
+        } else if let volume = getVolume(device: deviceID), volume > 0,
+                  setVolume(device: deviceID, volume: 0) {
+            silenced = .volume(deviceID, previous: volume)
+            print("[DubScribe] System audio silenced by volume (was \(volume))")
+        } else {
+            print("[DubScribe] SystemMediaController: This output can be neither muted nor turned down")
+        }
     }
 
-    /// Restore the system audio to its pre-mute state.
+    /// Undo `muteSystemAudio()`. Does nothing if no mute of ours is in force, so
+    /// it is safe to call on every path that ends a recording.
     func restoreSystemAudio() {
-        // `didMute` matters: without it, stopping a recording when mute was never
-        // switched on would still unmute the user's deliberately muted output.
-        guard didMute, let deviceID = defaultOutputDeviceID() else { return }
+        guard let silenced else { return }
+        self.silenced = nil
 
-        setMute(device: deviceID, muted: false)
-
-        // Restore saved volume if we captured one
-        if let vol = savedVolume {
-            setVolume(device: deviceID, volume: vol)
+        switch silenced {
+        case .muteFlag(let deviceID):
+            setMute(device: deviceID, muted: false)
+        case .volume(let deviceID, let previous):
+            // Only if it is still where we left it. A level the user set during
+            // the recording is theirs to keep.
+            if getVolume(device: deviceID) == 0 {
+                setVolume(device: deviceID, volume: previous)
+            }
         }
-
-        didMute = false
-        savedVolume = nil
         print("[DubScribe] System audio restored")
     }
 
@@ -83,7 +107,7 @@ actor SystemMediaController {
         return status == noErr ? deviceID : nil
     }
 
-    private func getVolume(device: AudioObjectID) -> Float {
+    private func getVolume(device: AudioObjectID) -> Float32? {
         var volume: Float32 = 0
         var size = UInt32(MemoryLayout<Float32>.size)
         var address = AudioObjectPropertyAddress(
@@ -92,11 +116,13 @@ actor SystemMediaController {
             mElement: kAudioObjectPropertyElementMain
         )
 
-        AudioObjectGetPropertyData(device, &address, 0, nil, &size, &volume)
+        guard AudioObjectGetPropertyData(device, &address, 0, nil, &size, &volume) == noErr else { return nil }
         return volume
     }
 
-    private func setVolume(device: AudioObjectID, volume: Float) {
+    /// Returns whether the device accepted the new level.
+    @discardableResult
+    private func setVolume(device: AudioObjectID, volume: Float32) -> Bool {
         var vol = volume
         let size = UInt32(MemoryLayout<Float32>.size)
         var address = AudioObjectPropertyAddress(
@@ -105,10 +131,27 @@ actor SystemMediaController {
             mElement: kAudioObjectPropertyElementMain
         )
 
-        AudioObjectSetPropertyData(device, &address, 0, nil, size, &vol)
+        return AudioObjectSetPropertyData(device, &address, 0, nil, size, &vol) == noErr
     }
 
-    private func setMute(device: AudioObjectID, muted: Bool) {
+    /// The device's mute flag, or nil if it has none that can be read.
+    private func isMuted(device: AudioObjectID) -> Bool? {
+        var mute: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyMute,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        guard AudioObjectGetPropertyData(device, &address, 0, nil, &size, &mute) == noErr else { return nil }
+        return mute != 0
+    }
+
+    /// Returns whether the device accepted the change. A device with no mute
+    /// flag reports failure here rather than being assumed muted.
+    @discardableResult
+    private func setMute(device: AudioObjectID, muted: Bool) -> Bool {
         var mute: UInt32 = muted ? 1 : 0
         let size = UInt32(MemoryLayout<UInt32>.size)
         var address = AudioObjectPropertyAddress(
@@ -117,6 +160,6 @@ actor SystemMediaController {
             mElement: kAudioObjectPropertyElementMain
         )
 
-        AudioObjectSetPropertyData(device, &address, 0, nil, size, &mute)
+        return AudioObjectSetPropertyData(device, &address, 0, nil, size, &mute) == noErr
     }
 }

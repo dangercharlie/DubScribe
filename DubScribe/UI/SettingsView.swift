@@ -275,7 +275,7 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Advanced settings")
             .accessibilityValue(advancedExpanded ? "Expanded" : "Collapsed")
-            .accessibilityHint("Shows media handling and the level indicator")
+            .accessibilityHint("Shows the start cue, muting and the level indicator")
 
             if advancedExpanded {
                 divider

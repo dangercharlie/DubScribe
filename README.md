@@ -75,7 +75,7 @@ change while working, the clips folder, and Settings itself.
 - **Re-copy the last clip** without recording it again.
 - **Microphone selection**, with a test panel and live level guide.
 - **Optional audio handling.** Mute your speakers for the length of a recording,
-  then put the level back exactly as it was.
+  then put them back exactly as they were.
 - **Clips clean up after themselves** — see below.
 
 Shortcuts use Carbon (`RegisterEventHotKey`) and muting uses CoreAudio, so
