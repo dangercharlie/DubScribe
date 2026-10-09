@@ -1,0 +1,29 @@
+name: Build Check
+
+on:
+  push:
+    branches:
+      - '**' # Every branch push. Tags are left to release.yml.
+  workflow_dispatch: # Adds a "Run workflow" button on the Actions tab
+
+# A newer push to the same branch cancels the run still going for the old one.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest # Same runner as release.yml, so the same Xcode
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # The same build as release.yml, and nothing after it: no DMG, no
+      # release. A red cross here means a release tag would fail too. As with
+      # releases, this proves the code compiles and nothing more.
+      - name: Build App with Xcode
+        run: |
+          xcodebuild -project DubScribe.xcodeproj -scheme DubScribe -configuration Release build -derivedDataPath build
