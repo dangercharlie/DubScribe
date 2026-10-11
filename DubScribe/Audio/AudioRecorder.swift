@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import CoreAudio
+import QuartzCore
 
 /// Records microphone audio to a WAV file using AVAudioEngine + AVAudioFile.
 /// AVAudioEngine lets us:
@@ -11,8 +12,22 @@ import CoreAudio
 final class AudioRecorder: NSObject, ObservableObject {
 
     @Published var isRecording = false
-    @Published var recordingDuration: TimeInterval = 0
     @Published var lastError: String?
+
+    /// How long the current recording has been running.
+    ///
+    /// Computed from the start date rather than republished. It used to be a
+    /// `@Published` value driven by a 0.1 s timer, which made every observer of
+    /// the recorder — the indicator above all — re-evaluate ten times a second
+    /// for a figure nothing displayed to better than a second. The indicator
+    /// now keeps its own one-second clock from `recordingStartedAt`, and the
+    /// coordinator reads this once, at stop, before the engine is torn down.
+    var recordingDuration: TimeInterval {
+        recordingStartedAt.map { Date().timeIntervalSince($0) } ?? 0
+    }
+
+    /// When the current recording began; nil when idle.
+    private(set) var recordingStartedAt: Date?
 
     /// Live input level 0…1 (updated ~10× per second while recording or monitoring).
     ///
@@ -21,32 +36,25 @@ final class AudioRecorder: NSObject, ObservableObject {
     /// Bluetooth call-mode switch that 0.7.0 removed.
     @Published var inputLevel: Float = 0
 
-    /// Rolling level history driving the on-screen dot matrix, oldest first.
+    /// Rolling level history driving the on-screen dot matrix.
     ///
     /// Filled from the same capture tap that writes the file, so the indicator
     /// never opens a second audio engine — doing so would re-trigger the
     /// Bluetooth call-mode switch that 0.7.0 removed.
-    @Published var waveform: [Float] = []
-
-    /// Reference-clock time of the newest bin, and the spacing between bins.
     ///
-    /// The indicator needs these to place each column by *time* rather than by
-    /// array index. That is what lets the matrix scroll smoothly instead of
-    /// stepping once per audio callback, which is the only way to get smooth
-    /// motion given the tap's fixed ~10 Hz delivery rate.
-    @Published var waveformEnd: TimeInterval = 0
-    @Published var waveformBinInterval: TimeInterval = 0.02
-
-    /// How many bins the matrix retains — comfortably more than one window's worth.
-    static let waveformCapacity = 160
+    /// A separate object rather than published properties here, so that the
+    /// matrix is the only view invalidated when a buffer lands. See
+    /// `WaveformTrace`.
+    let trace = WaveformTrace()
 
     /// Target bins per second.
     ///
     /// The tap's buffer size is NOT controllable. `installTap(bufferSize:)` is
-    /// only a hint, and this hardware was measured delivering ~100 ms buffers
-    /// (4800 frames at 10.7 Hz) for every requested size up to 4096, so asking
-    /// for a smaller buffer achieves nothing. Bins are derived from the buffer
-    /// duration instead, to hold this rate steady.
+    /// only a hint, and this hardware was measured delivering 100 ms buffers
+    /// (4410 frames at 44.1 kHz, 4800 at 48 kHz) for every requested size up to
+    /// 4096, so asking for a smaller buffer achieves nothing. Bins are derived
+    /// from the buffer duration instead, to hold this rate steady. The buffers
+    /// are 100 ms long but do not *arrive* every 100 ms — see `bufferEnd`.
     private static let targetBinsPerSecond: Double = 60
 
     /// Peak level observed during the most recently finished recording.
@@ -61,8 +69,6 @@ final class AudioRecorder: NSObject, ObservableObject {
     private var engine: AVAudioEngine?
     private var audioFile: AVAudioFile?
     private var currentURL: URL?
-    private var durationTimer: Timer?
-    private var recordingStartTime: Date?
     private var peakLevel: Float = 0
 
     // MARK: - Recording
@@ -109,7 +115,7 @@ final class AudioRecorder: NSObject, ObservableObject {
 
             print("[DubScribe.Audio] Recording started → \(url.lastPathComponent)")
 
-            inputNode.installTap(onBus: 0, bufferSize: 1024, format: hwFormat) { [weak self] buffer, _ in
+            inputNode.installTap(onBus: 0, bufferSize: 1024, format: hwFormat) { [weak self] buffer, when in
                 guard let self, let af = self.audioFile else { return }
                 do {
                     // Convert to mono if stereo
@@ -126,24 +132,29 @@ final class AudioRecorder: NSObject, ObservableObject {
                 let bufferDuration = Double(buffer.frameLength) / hwFormat.sampleRate
                 let binCount = max(1, Int((bufferDuration * Self.targetBinsPerSecond).rounded()))
                 let bins = Self.rmsBins(buffer: buffer, count: binCount)
-                let endTime = Date().timeIntervalSinceReferenceDate
+                let stamp = Self.bufferEnd(when, bufferDuration: bufferDuration)
                 Task { @MainActor in
                     self.inputLevel = level
                     self.peakLevel = max(self.peakLevel, level)
-                    self.appendWaveform(bins, endTime: endTime, bufferDuration: bufferDuration)
+                    if self.trace.snapshot.bins.isEmpty {
+                        // Once per recording, so a device that does not stamp its
+                        // buffers (the fallback below) can be recognised in a log.
+                        print(String(format: "[DubScribe.Audio] Trace clock: %@ (%ld-frame buffers, newest bin %.1f ms old at delivery)",
+                                     stamp.hostClock ? "audio host time" : "wall clock — host time unavailable",
+                                     Int(buffer.frameLength), stamp.delay * 1000))
+                    }
+                    self.trace.append(bins, end: stamp.end,
+                                      interval: bufferDuration / Double(bins.count))
                 }
             }
 
             try eng.start()
             isRecording = true
-            recordingStartTime = Date()
-            recordingDuration = 0
+            recordingStartedAt = Date()
             peakLevel = 0
             inputLevel = 0
-            waveform = []
-            waveformEnd = 0
+            trace.reset()
             lastError = nil
-            startDurationTimer()
 
         } catch {
             fail("Cannot start recording: \(error.localizedDescription)")
@@ -153,12 +164,13 @@ final class AudioRecorder: NSObject, ObservableObject {
     func stopRecording() {
         guard isRecording else { return }
 
+        let duration = recordingDuration
         engine?.inputNode.removeTap(onBus: 0)
         engine?.stop()
         engine = nil
         audioFile = nil
         isRecording = false
-        stopDurationTimer()
+        recordingStartedAt = nil
         inputLevel = 0
 
         guard let url = currentURL else { onRecordingFinished?(nil); return }
@@ -170,7 +182,7 @@ final class AudioRecorder: NSObject, ObservableObject {
             print("[DubScribe.Audio] Warning: recording may be silent (peak level \(peakLevel))")
         }
         if let size = try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int {
-            print("[DubScribe.Audio] Finished: duration=\(String(format:"%.2f",recordingDuration))s  size=\(size/1024)KB  file=\(url.lastPathComponent)")
+            print("[DubScribe.Audio] Finished: duration=\(String(format:"%.2f",duration))s  size=\(size/1024)KB  file=\(url.lastPathComponent)")
         }
         onRecordingFinished?(url)
     }
@@ -209,6 +221,7 @@ final class AudioRecorder: NSObject, ObservableObject {
         print("[DubScribe.Audio] Error: \(message)")
         lastError = message
         isRecording = false
+        recordingStartedAt = nil
         engine?.stop()
         engine = nil
         audioFile = nil
@@ -224,20 +237,39 @@ final class AudioRecorder: NSObject, ObservableObject {
         onRecordingFinished?(nil)
     }
 
-    private func startDurationTimer() {
-        durationTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            // Read the MainActor-isolated start time inside the hop rather than
-            // in the (Sendable) timer closure.
-            Task { @MainActor in
-                guard let self, let start = self.recordingStartTime else { return }
-                self.recordingDuration = Date().timeIntervalSince(start)
-            }
-        }
-    }
-
-    private func stopDurationTimer() {
-        durationTimer?.invalidate()
-        durationTimer = nil
+    /// When the last sample of a tapped buffer was captured, on the reference
+    /// clock the indicator draws against.
+    ///
+    /// Buffers used to be stamped with `Date()` as the tap closure ran, and that
+    /// put the tap's scheduling jitter straight into the picture. The callback
+    /// does not arrive every 100 ms: the audio HAL hands the engine 512-frame
+    /// cycles, a 100 ms buffer is not a whole number of them, and so successive
+    /// callbacks alternate between nine and ten cycles apart — measured at
+    /// 96 and 107 ms on the built-in microphone at 48 kHz. The indicator derives
+    /// every column's position from the newest stamp, so a callback 7 ms late
+    /// shifted the entire trace 1.3 pt one way and the next, 4 ms early, shifted
+    /// it 0.8 pt back: a visible hitch ten times a second, at any frame rate.
+    ///
+    /// The audio clock has none of that. `hostTime` is when the buffer's first
+    /// sample was captured, and consecutive buffers abut to within a
+    /// microsecond. It is converted to `Date`'s clock through an offset sampled
+    /// at one instant, so the delivery delay cancels out of the result. Nothing
+    /// already on screen then moves except by scrolling; a late callback only
+    /// means its newest columns appear a few milliseconds late, in the right
+    /// place.
+    private static func bufferEnd(_ when: AVAudioTime, bufferDuration: TimeInterval)
+        -> (end: TimeInterval, hostClock: Bool, delay: TimeInterval)
+    {
+        let dateNow = Date().timeIntervalSinceReferenceDate
+        // Fallback for a device whose buffers carry no host timestamp. Not seen
+        // on anything tested, but the API allows it.
+        guard when.isHostTimeValid else { return (dateNow, false, 0) }
+        // `CACurrentMediaTime` is `mach_absolute_time` in seconds — the same
+        // clock `hostTime` is expressed in.
+        let hostNow = CACurrentMediaTime()
+        let hostEnd = AVAudioTime.seconds(forHostTime: when.hostTime) + bufferDuration
+        let delay = hostNow - hostEnd
+        return (dateNow - delay, true, delay)
     }
 
     // MARK: - Input Device Selection via Core Audio
@@ -322,15 +354,48 @@ final class AudioRecorder: NSObject, ObservableObject {
         }
         return bins
     }
+}
 
-    /// Append bins to the rolling history, discarding the oldest.
-    private func appendWaveform(_ bins: [Float], endTime: TimeInterval, bufferDuration: TimeInterval) {
+/// The level history behind the indicator's dot matrix, published as one value.
+///
+/// Kept apart from `AudioRecorder` so the recorder's other observers are left
+/// alone when audio arrives, and so the matrix is the only view invalidated by
+/// it. The three values used to be three separate published properties on the
+/// recorder; publishing them as one struct also means a frame can never see a
+/// new end time against the old bins.
+@MainActor
+final class WaveformTrace: ObservableObject {
+    struct Snapshot {
+        /// Amplitude per bin, oldest first.
+        var bins: [Float] = []
+        /// Reference-clock time at which the newest bin ended. The indicator
+        /// places every column by time rather than by array index — see
+        /// `DotMatrixGeometry` — and this, with `interval`, is what it needs.
+        var end: TimeInterval = 0
+        /// Spacing between bins, assumed steady across the history. The tap
+        /// delivers a constant buffer size, so it is.
+        var interval: TimeInterval = 0.02
+    }
+
+    @Published private(set) var snapshot = Snapshot()
+
+    /// How many bins are retained — comfortably more than one window's worth.
+    static let capacity = 160
+
+    /// Append a buffer's bins, discarding the oldest beyond `capacity`.
+    func append(_ bins: [Float], end: TimeInterval, interval: TimeInterval) {
         guard !bins.isEmpty else { return }
-        waveform.append(contentsOf: bins)
-        waveformEnd = endTime
-        waveformBinInterval = bufferDuration / Double(bins.count)
-        let overflow = waveform.count - Self.waveformCapacity
-        if overflow > 0 { waveform.removeFirst(overflow) }
+        var next = snapshot
+        next.bins.append(contentsOf: bins)
+        let overflow = next.bins.count - Self.capacity
+        if overflow > 0 { next.bins.removeFirst(overflow) }
+        next.end = end
+        next.interval = interval
+        snapshot = next
+    }
+
+    func reset() {
+        snapshot = Snapshot()
     }
 }
 

@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **The recording indicator's trace hitched ten times a second.** The
+  microphone tap does not deliver its 100 ms buffers on a steady beat: measured
+  on the built-in microphone, consecutive buffers arrive 96 and 107 ms apart in
+  turn, because the audio hardware works in 512-frame cycles and 100 ms is not a
+  whole number of them. Every column of the trace was positioned relative to the
+  moment the newest buffer *arrived*, so the whole trace shifted about a point
+  one way, then back, on each delivery — a micro-stutter at any frame rate.
+  Columns are now positioned by the audio hardware's own timestamps, which abut
+  exactly, so nothing already on screen moves except by scrolling.
+- **The red recording dot stopped pulsing after the first recording of a
+  session.** The pulse is started when the dot appears, but the state behind it
+  was never reset when the dot went away, so on every later recording it was
+  asked to animate to a value it already had, and sat solid red. It now pulses
+  on every recording.
+
+### Changed
+
+- **The recording indicator is cheaper to keep on screen.** Each dot of the
+  trace used to be drawn with its own fill, up to about 1,100 a frame at 120 Hz;
+  a frame is now a single fill, with the edge fade done as a gradient. The
+  indicator also no longer rebuilds its whole layout for every audio buffer and
+  every tenth of a second for the elapsed time: the trace is watched only by the
+  matrix that draws it, and the elapsed label keeps its own one-second clock.
+  Measured in a Release build while recording: about 15% CPU down to about 10%.
+  The trace looks exactly as it did.
+
 ## v0.7.4
 
 ### Fixed
