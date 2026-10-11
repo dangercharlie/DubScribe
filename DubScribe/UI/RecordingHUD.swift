@@ -67,6 +67,12 @@ final class RecordingHUDModel: ObservableObject {
     /// draw, so what the user is judging is the appearance and nothing else.
     @Published var preview: HUDPreview?
 
+    /// When the live recording began. The elapsed label runs its own one-second
+    /// clock from this rather than reading a duration off the recorder, so the
+    /// indicator is not re-evaluated every time that duration is republished.
+    /// Nil while a still preview is up, which has no recording to time.
+    @Published var startedAt: Date?
+
     /// Where the clip will land: the app that was frontmost when capture began.
     ///
     /// Shown in the indicator so the destination is visible *before* pasting —
@@ -181,6 +187,7 @@ final class RecordingHUDController {
 
         model.preview = Self.previewSample()
         model.state = .recording
+        model.startedAt = nil
         // No destination: there is no clip and no frontmost app to name, so the
         // panel falls back to its generic "Clipboard" wording.
         model.targetAppName = nil
@@ -255,6 +262,11 @@ final class RecordingHUDController {
         dismissTask?.cancel()
         dismissTask = nil
         model.state = .recording
+        // The recorder's own stamp, so the label agrees with the duration that
+        // is saved with the clip. It is set by the time the indicator is asked
+        // for; the fallback only covers a recorder that failed to start, whose
+        // indicator is about to be taken down anyway.
+        model.startedAt = recorder.recordingStartedAt ?? Date()
 
         let panel = self.panel ?? makePanel()
         self.panel = panel
@@ -327,7 +339,7 @@ final class RecordingHUDController {
     // MARK: - Panel construction
 
     private func makePanel() -> RecordingHUDWindow {
-        let hosting = NSHostingView(rootView: RecordingHUDView(recorder: recorder, model: model))
+        let hosting = NSHostingView(rootView: RecordingHUDView(trace: recorder.trace, model: model))
         hosting.frame = NSRect(origin: .zero, size: RecordingHUDMetrics.size)
 
         let panel = RecordingHUDWindow(
@@ -388,7 +400,16 @@ final class RecordingHUDController {
 // MARK: - SwiftUI content
 
 struct RecordingHUDView: View {
-    @ObservedObject var recorder: AudioRecorder
+    /// The live trace. Handed on to the matrix view and observed only there.
+    ///
+    /// This view deliberately does not observe the recorder. It used to, as an
+    /// `@ObservedObject`, and every value the recorder published — the level,
+    /// the trace and the elapsed duration, about twenty publishes a second
+    /// between them — rebuilt the destination row, re-measured its text and
+    /// diffed the whole indicator, on the same thread that had to draw the next
+    /// frame. Nothing up here changes more than once a second, so nothing up
+    /// here should be redrawn more often than that.
+    let trace: WaveformTrace
     @ObservedObject var model: RecordingHUDModel
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -491,7 +512,9 @@ struct RecordingHUDView: View {
             // The moment capture stops the trace is history, so it goes. Only the
             // confirmation row is left, and the panel closes up around it.
             if model.state == .recording {
-                dotMatrix
+                DotMatrixView(trace: trace, preview: model.preview)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: DotMatrixView.matrixHeight)
                     .transition(.opacity)
             }
         }
@@ -525,28 +548,98 @@ struct RecordingHUDView: View {
                         pulse = true
                     }
                 }
+                // Reset on the way out. `pulse` is `@State` on a view that lives
+                // as long as the panel, and the panel is reused across
+                // recordings, so without this it was still `true` when the dot
+                // came back for the next take. `onAppear` then animated a change
+                // that was not one: no animation attached, and the dot sat solid
+                // red. Measured by sampling the dot's colour in screenshots: it
+                // pulsed throughout the first recording of a session and was the
+                // same full red in every frame of the second.
+                .onDisappear { pulse = false }
         }
     }
 
-    /// The scrolling dot matrix.
+    /// The elapsed time, on its own one-second clock.
     ///
-    /// A grid of dots — thirteen rows deep, so the trace has real vertical detail
-    /// rather than reading as a single strip. Each column is one time bin, and
-    /// its amplitude lights the dots outward from the centre row, mirroring the
-    /// waveform above and below the axis. Silence therefore draws a flat line of
-    /// single dots through the middle, exactly as a waveform should.
+    /// This used to read a duration the recorder republished ten times a second
+    /// from a timer, which made the whole indicator re-evaluate ten times a
+    /// second for a label that changes once a second. A `TimelineView` on
+    /// `ElapsedSchedule` ticks exactly on the second boundaries from the
+    /// recording's start and touches nothing but this text. The timer is gone
+    /// from the recorder.
     ///
-    /// The scroll is driven by `TimelineView(.animation)` whenever this is the live
-    /// trace, so positions are recomputed from the clock every frame. Audio only arrives about ten times
-    /// a second, and placing columns by *age* rather than by array index is what
-    /// turns that into continuous motion: two frames a frame apart produce
-    /// positions a frame apart, with no quantisation to bin boundaries.
-    @ViewBuilder
-    private var dotMatrix: some View {
-        matrixContent
-            .frame(maxWidth: .infinity)
-            .frame(height: Self.matrixHeight)
+    /// One `Text` for every state, deliberately. Separate views for "Copied" and
+    /// the time would be an insertion and a removal under the state animation,
+    /// and the label would cross-fade instead of simply changing — which is what
+    /// it has always done.
+    private var elapsed: some View {
+        TimelineView(ElapsedSchedule(start: model.state == .recording ? model.startedAt : nil)) { context in
+            Text(label(at: context.date))
+        }
+        .font(.system(size: 12, weight: .medium, design: .monospaced))
+        .foregroundStyle(.secondary)
+        .frame(width: 52, alignment: .trailing)
     }
+
+    private func label(at date: Date) -> String {
+        switch model.state {
+        case .copied:
+            return "Copied"
+        case .recording:
+            // A still preview has no recording to time.
+            guard let start = model.startedAt else { return Self.format(0) }
+            return Self.format(date.timeIntervalSince(start))
+        }
+    }
+
+    private static func format(_ interval: TimeInterval) -> String {
+        // The periodic schedule delivers dates that are whole seconds from the
+        // start only to within floating-point error, so a bare floor could read
+        // 2.9999 as two and lag by a second until the next tick.
+        let total = Int((interval + 0.01).rounded(.down))
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+}
+
+/// Ticks on every whole second after `start`, and never when there is nothing
+/// to time.
+///
+/// `.periodic` alone cannot be switched off, and a schedule that keeps ticking
+/// would carry on once a second in the hidden panel between recordings — idle
+/// work for a label nobody can see. An empty entry sequence makes the view
+/// render once and then sit still, which covers both the still preview and the
+/// "Copied" confirmation.
+struct ElapsedSchedule: TimelineSchedule {
+    let start: Date?
+
+    func entries(from startDate: Date, mode: Mode) -> AnySequence<Date> {
+        guard let start else { return AnySequence([]) }
+        return AnySequence(PeriodicTimelineSchedule(from: start, by: 1).entries(from: startDate, mode: mode))
+    }
+}
+
+/// The scrolling dot matrix.
+///
+/// A grid of dots — thirteen rows deep, so the trace has real vertical detail
+/// rather than reading as a single strip. Each column is one time bin, and
+/// its amplitude lights the dots outward from the centre row, mirroring the
+/// waveform above and below the axis. Silence therefore draws a flat line of
+/// single dots through the middle, exactly as a waveform should.
+///
+/// Its own view, observing only the trace, so that an arriving audio buffer
+/// invalidates this and nothing else in the indicator.
+///
+/// The scroll is driven by `TimelineView(.animation)` whenever this is the live
+/// trace, so positions are recomputed from the clock every frame. Audio only
+/// arrives about ten times a second, and placing columns by *age* rather than by
+/// array index is what turns that into continuous motion: two frames a frame
+/// apart produce positions a frame apart, with no quantisation to bin boundaries.
+struct DotMatrixView: View {
+    @ObservedObject var trace: WaveformTrace
+
+    /// Non-nil while the indicator is a still preview from Settings.
+    let preview: HUDPreview?
 
     /// Either the live trace or a frozen preview of it.
     ///
@@ -557,36 +650,39 @@ struct RecordingHUDView: View {
     /// scrolled away would be judged on the wrong thing — and costs nothing while
     /// it is on screen, which matters because it can sit there for as long as the
     /// user keeps fiddling with the slider.
-    @ViewBuilder
-    private var matrixContent: some View {
-        if let preview = model.preview {
+    var body: some View {
+        if let preview {
             Canvas { context, size in
-                drawMatrix(&context, size: size,
-                           bins: preview.bins,
-                           newest: preview.newest,
-                           interval: preview.interval,
-                           now: preview.newest,
-                           springy: false)
+                Self.drawMatrix(&context, size: size,
+                                bins: preview.bins,
+                                newest: preview.newest,
+                                interval: preview.interval,
+                                now: preview.newest,
+                                springy: false)
             }
         } else {
             TimelineView(.animation) { timeline in
+                // Read the trace here, on the main thread, and hand the value to
+                // the canvas rather than letting the drawing closure reach back
+                // into the object.
+                let snapshot = trace.snapshot
                 Canvas { context, size in
-                    drawMatrix(&context, size: size,
-                               bins: recorder.waveform,
-                               newest: recorder.waveformEnd,
-                               interval: recorder.waveformBinInterval,
-                               // Draw slightly behind real time. A single audio
-                               // callback hands over a whole buffer's worth of bins
-                               // at once — about six every 100 ms — and drawing them
-                               // the moment they arrive is what makes the trace
-                               // advance in visible 10 Hz steps. Holding them back by
-                               // a little more than one callback means each bin is
-                               // released when its own moment arrives instead, so new
-                               // data flows in at the rate it was captured rather
-                               // than in bursts.
-                               now: timeline.date.timeIntervalSinceReferenceDate
-                                    - Self.revealDelay,
-                               springy: true)
+                    Self.drawMatrix(&context, size: size,
+                                    bins: snapshot.bins,
+                                    newest: snapshot.end,
+                                    interval: snapshot.interval,
+                                    // Draw slightly behind real time. A single audio
+                                    // callback hands over a whole buffer's worth of bins
+                                    // at once — about six every 100 ms — and drawing them
+                                    // the moment they arrive is what makes the trace
+                                    // advance in visible 10 Hz steps. Holding them back by
+                                    // a little more than one callback means each bin is
+                                    // released when its own moment arrives instead, so new
+                                    // data flows in at the rate it was captured rather
+                                    // than in bursts.
+                                    now: timeline.date.timeIntervalSinceReferenceDate
+                                         - Self.revealDelay,
+                                    springy: true)
                 }
             }
         }
@@ -599,10 +695,24 @@ struct RecordingHUDView: View {
     /// A still preview has no arriving columns, so leaving the springs in would
     /// freeze the newest few columns part-way up their travel, which reads as a
     /// rendering fault rather than as motion.
-    private func drawMatrix(_ context: inout GraphicsContext, size: CGSize,
-                            bins: [Float], newest: TimeInterval,
-                            interval: TimeInterval, now: TimeInterval,
-                            springy: Bool) {
+    ///
+    /// Every lit dot goes into one `Path`, filled once. This used to be one
+    /// `Path(ellipseIn:)` and one `fill` per dot, each with its own shading for
+    /// the edge fade — up to about 1,100 fills a frame, 120 frames a second on a
+    /// ProMotion display. The app measured ~15% CPU for that in a Release build,
+    /// almost all of it in the canvas renderer's display list. One fill makes the
+    /// refresh rate irrelevant to the cost; the fade moves into the fill's shading
+    /// (see `edgeFade`).
+    ///
+    /// Dot origins are deliberately *not* snapped to device pixels. The column
+    /// pitch is 2.7 pt — 5.4 px at 2× — so snapping each column would make the
+    /// gaps alternate between 5 and 6 px in a pattern that walks along the trace
+    /// as it scrolls, which is a worse artefact than the faint anti-aliasing
+    /// shimmer it would cure.
+    static func drawMatrix(_ context: inout GraphicsContext, size: CGSize,
+                           bins: [Float], newest: TimeInterval,
+                           interval: TimeInterval, now: TimeInterval,
+                           springy: Bool) {
         let columns = DotMatrixGeometry.visibleColumns(
             binCount: bins.count,
             newest: newest,
@@ -611,55 +721,49 @@ struct RecordingHUDView: View {
             width: size.width
         )
 
-        let pitch = Self.dotSize + Self.dotGap
-        let top = (size.height - Self.matrixHeight) / 2
-        let centreRow = Self.matrixRows / 2
-        let centreY = top + CGFloat(centreRow) * pitch
+        let pitch = dotSize + dotGap
+        let top = (size.height - matrixHeight) / 2
+        let centreRow = matrixRows / 2
+        var dots = Path()
 
-        guard !columns.isEmpty else {
+        if columns.isEmpty {
             // Silence — and equally the moment before the first buffer arrives,
             // which the reveal delay stretches to about 220 ms.
             //
             // Drawing the flat axis rather than nothing is not merely cosmetic, and
             // the reason is not obvious: an *empty* Canvas is pathological. Measured
-            // at ~108% CPU against ~30% when it draws, because SwiftUI appears to
-            // keep re-evaluating a display list that produces nothing at all. A flat
-            // line is also, conveniently, exactly what silence looks like on a
-            // waveform.
+            // on the earlier per-dot renderer at ~108% CPU against ~30% when it
+            // drew, because SwiftUI appears to keep re-evaluating a display list
+            // that produces nothing at all. A flat line is also, conveniently,
+            // exactly what silence looks like on a waveform.
+            let centreY = top + CGFloat(centreRow) * pitch
             var x: CGFloat = 0
             while x < size.width {
-                context.fill(
-                    Path(ellipseIn: CGRect(x: x, y: centreY,
-                                           width: Self.dotSize, height: Self.dotSize)),
-                    with: .color(Color.primary.opacity(Self.edgeFade(x, width: size.width)))
-                )
+                dots.addEllipse(in: CGRect(x: x, y: centreY,
+                                           width: dotSize, height: dotSize))
                 x += pitch
             }
-            return
-        }
+        } else {
+            for column in columns {
+                // Outward from the centre: how many dots the amplitude lights. The
+                // settle term springs the column up to its height rather than
+                // stamping it there.
+                let amplitude = displayLevel(bins[column.index])
+                    * (springy ? elasticSettle(CGFloat(column.age / settleSeconds)) : 1)
+                let reach = Int((amplitude * CGFloat(centreRow)).rounded())
 
-        for column in columns {
-            // Outward from the centre: how many dots the amplitude lights. The
-            // settle term springs the column up to its height rather than stamping
-            // it there.
-            let amplitude = Self.displayLevel(bins[column.index])
-                * (springy ? Self.elasticSettle(CGFloat(column.age / Self.settleSeconds)) : 1)
-            let reach = Int((amplitude * CGFloat(centreRow)).rounded())
-            let fade = Self.edgeFade(column.x, width: size.width)
-
-            for row in (centreRow - reach)...(centreRow + reach) {
-                let rect = CGRect(
-                    x: column.x,
-                    y: top + CGFloat(row) * pitch,
-                    width: Self.dotSize,
-                    height: Self.dotSize
-                )
-                context.fill(
-                    Path(ellipseIn: rect),
-                    with: .color(Color.primary.opacity(fade))
-                )
+                for row in (centreRow - reach)...(centreRow + reach) {
+                    dots.addEllipse(in: CGRect(
+                        x: column.x,
+                        y: top + CGFloat(row) * pitch,
+                        width: dotSize,
+                        height: dotSize
+                    ))
+                }
             }
         }
+
+        context.fill(dots, with: edgeFade(width: size.width))
     }
 
     /// Geometry of the matrix: fine round dots, roughly square cells.
@@ -670,13 +774,16 @@ struct RecordingHUDView: View {
     private static let matrixRows = 13
     private static let dotSize: CGFloat = 1.6
     private static let dotGap: CGFloat = 1.1
-    private static var matrixHeight: CGFloat {
+    static var matrixHeight: CGFloat {
         CGFloat(matrixRows) * dotSize + CGFloat(matrixRows - 1) * dotGap
     }
 
     /// How far behind real time the matrix is drawn, so that a buffer's worth of
-    /// bins can be released one at a time. A little more than the measured
-    /// ~100 ms callback interval, with margin for jitter.
+    /// bins can be released one at a time. A little more than the ~100 ms
+    /// callback interval, with margin for delivery: measured on the built-in
+    /// microphone at 44.1 kHz, a buffer's last sample is 1–13 ms old by the time
+    /// the tap sees it, and the buffer's oldest bin ends 83 ms before its newest,
+    /// so that bin is at worst available 24 ms before it is due on screen.
     private static let revealDelay: TimeInterval = 0.12
 
     /// How long a column takes to spring into its final height.
@@ -701,11 +808,27 @@ struct RecordingHUDView: View {
     /// This is the part that stops the scroll reading as clunky: a hard entry at
     /// one edge and a hard exit at the other were the problem, not the motion
     /// itself.
-    private static func edgeFade(_ x: CGFloat, width: CGFloat) -> Double {
-        let ramp: CGFloat = 10
-        let fromLeft = min(max(x / ramp, 0), 1)
-        let fromRight = min(max((width - x) / ramp, 0), 1)
-        return Double(min(fromLeft, fromRight))
+    ///
+    /// Done as the fill's shading — a horizontal gradient that is transparent at
+    /// the edges and solid across the middle — rather than as a per-column
+    /// opacity, so that the whole frame can be a single fill. The ramp is the
+    /// same 10 pt it always was; it is now continuous across each dot instead of
+    /// stepped per column, which is the only visible difference and not one the
+    /// eye can find.
+    private static let edgeRamp: CGFloat = 10
+
+    private static func edgeFade(width: CGFloat) -> GraphicsContext.Shading {
+        let ramp = min(edgeRamp / max(width, 1), 0.5)
+        return .linearGradient(
+            Gradient(stops: [
+                .init(color: Color.primary.opacity(0), location: 0),
+                .init(color: Color.primary,            location: ramp),
+                .init(color: Color.primary,            location: 1 - ramp),
+                .init(color: Color.primary.opacity(0), location: 1),
+            ]),
+            startPoint: .zero,
+            endPoint: CGPoint(x: width, y: 0)
+        )
     }
 
     /// Map RMS onto a 0…1 display level with a dB curve.
@@ -720,25 +843,6 @@ struct RecordingHUDView: View {
         guard value > 0.0001 else { return 0 }
         let db = 20 * log10(Double(value))
         return CGFloat(max(0, min(1, (db - floorDb) / -floorDb)))
-    }
-
-    private var elapsed: some View {
-        Text(label)
-            .font(.system(size: 12, weight: .medium, design: .monospaced))
-            .foregroundStyle(.secondary)
-            .frame(width: 52, alignment: .trailing)
-    }
-
-    private var label: String {
-        switch model.state {
-        case .copied:    return "Copied"
-        case .recording: return Self.format(recorder.recordingDuration)
-        }
-    }
-
-    private static func format(_ interval: TimeInterval) -> String {
-        let total = Int(interval.rounded(.down))
-        return String(format: "%d:%02d", total / 60, total % 60)
     }
 }
 
